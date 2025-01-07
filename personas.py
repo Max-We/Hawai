@@ -6,7 +6,7 @@ import pandas as pd
 from tabulate import tabulate
 
 # Generation settings
-NUM_PERSONAS = 1
+NUM_PERSONAS = 5
 PERSONAS_FILE = "data/personas.csv"
 # LLM settings for generating person descriptions
 MODEL = "gpt-3.5-turbo-instruct"
