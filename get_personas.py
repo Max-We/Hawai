@@ -51,7 +51,7 @@ def generate_person_description(keywords_dict):
     Returns:
         str: Detailed description of the person
     """
-    template = """Given the following basic information about a person, create a detailed description including additional personality traits, hobbies, and life details:
+    template = """Given the following basic information about a person, create a detailed description which describes specific eating habits, food allergies, or dietary philosophies. For example, you can mention if you follow a vegetarian, vegan, keto or other specalised diet, if you avoid gluten or dairy, or if you have allergies to nuts, shellfish, or other foods :
 
     Name: {name}
     Age: {age}

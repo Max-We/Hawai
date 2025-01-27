@@ -63,6 +63,10 @@ def get_structured_preferences(
 
     prompt = create_preferences_prompt(instructions, persona, query)
 
+    print(instructions)
+    print(persona)
+    print(query)
+
     return structured_llm.invoke(prompt)
 
 def remove_breaks(text):
@@ -100,6 +104,7 @@ if __name__ == "__main__":
     parameters as you use for foods. Please remember that we would like you to report how much you 
     like each food or activity NOT how many time you eat each food or undertake each activity. 
     The answers to this questionnaire should fit to the persona specified in the persona section.
+    use the description part and use the full skale.
     """
 
     query = "What would be this person's likely food and activity preferences?"
