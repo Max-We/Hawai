@@ -6,9 +6,10 @@ from langchain_openai import ChatOpenAI
 import pandas as pd
 from dotenv import load_dotenv
 
-from personas import PERSONAS_FILE
+from get_personas import PERSONAS_FILE
 from questionnaire import FoodAndActivityPreferences
 
+PREFERENCES_FILE = "data/preferences.csv"
 MODEL = "gpt-3.5-turbo"
 TEMPERATURE = 0.2
 
@@ -117,4 +118,4 @@ if __name__ == "__main__":
         print(preferences)
 
     results_df = preferences_to_dataframe(personas_df, preferences_results)
-    results_df.to_csv('data/preferences.csv', index=False)
+    results_df.to_csv(PREFERENCES_FILE, index=False)
