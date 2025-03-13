@@ -154,3 +154,11 @@ class FoodAndActivityPreferences(BaseModel):
 
 # from langchain_core.utils.function_calling import convert_to_openai_function
 # print(convert_to_openai_function(FoodAndActivityPreferences))
+
+class CheckFoods(BaseModel):
+    adding_salt: conint(ge=1, le=11) = Field(description="Favorite food 1")
+    adding_salt: conint(ge=1, le=11) = Field(description="Favorite food 1")
+    adding_salt: conint(ge=1, le=11) = Field(description="Favorite food 1")
+    adding_salt: conint(ge=1, le=11) = Field(description="Disliked food 1")
+    adding_salt: conint(ge=1, le=11) = Field(description="Favorite food 1")
+    adding_salt: conint(ge=1, le=11) = Field(description="Favorite food 1")
