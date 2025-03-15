@@ -1,11 +1,12 @@
-import json
-from typing import List
+import random
 
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
+import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
-
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+from scipy.sparse.linalg import svds
+from sklearn.neighbors import NearestNeighbors
 
 from get_responses import PREFERENCES_FILE, remove_breaks
 from questionnaire import FoodAndActivityPreferences
@@ -16,6 +17,58 @@ TEMPERATURE = 0.2
 
 # Load environment variables
 load_dotenv()
+
+
+def get_rating(item_id, default_value=None):
+    if default_value:
+        return default_value
+
+    return random.randint(-2, 2)
+
+def active_learning_recommendation(user_item_matrix, n_iterations=10, n_factors=20, k_neighbors=10, latent_neighbor=True, default_rating=None):
+    n_users, n_items = user_item_matrix.shape
+
+    # SVD
+    U, sigma, Vt = svds(user_item_matrix, k=n_factors)
+
+    # KNN
+    if not latent_neighbor:
+        knn_model = NearestNeighbors(n_neighbors=k_neighbors, metric='cosine')
+        knn_model.fit(user_item_matrix)
+    else:
+        knn_model = NearestNeighbors(n_neighbors=k_neighbors, metric='cosine')
+        knn_model.fit(U)
+
+    # Iterative active learning process
+    summary = []
+    user_vector, user_latent = np.zeros(n_items), np.mean(U, axis=0)
+    for _ in range(n_iterations):
+        # Find similar users in original vector space
+        if not latent_neighbor:
+            _, similar_users_indices = knn_model.kneighbors([user_vector], n_neighbors=min(k_neighbors, len(user_item_matrix)))
+        else:
+            _, similar_users_indices = knn_model.kneighbors([user_latent], n_neighbors=min(k_neighbors, len(U)))
+
+        # Get the latent vectors for these similar users for prediction
+        similar_users_latents = U[similar_users_indices[0]]
+
+        # Active learning by uncertainty sampling (= maximizing information gain)
+        # 1. Calculate projected ratings
+        rating_projections = np.dot(similar_users_latents, np.dot(np.diag(sigma), Vt))
+        # 2. Calculate variance of ratings across selected users
+        rating_variances = np.var(rating_projections, axis=0) * (user_vector == 0)
+        # 3. Uncertainty sampling: select the item with the highest variance
+        selected_item = np.argmax(rating_variances)
+
+        # Ask oracle to rate the new item
+        rating = get_rating(selected_item, default_rating)
+        # Update user vector & latent representation
+        user_vector[selected_item] = rating
+        user_latent = np.dot(user_vector, np.dot(Vt.T, np.diag(1.0 / sigma)))
+        # Add to summary
+        summary.append((selected_item, rating))
+
+    return summary
 
 
 def create_ratings_prompt(instructions: str, food_preferences: FoodAndActivityPreferences, recipe_title: str, recipe_ingredients, query: str) -> str:
