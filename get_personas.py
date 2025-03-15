@@ -1,17 +1,14 @@
+import uuid
+
 from randomuser import RandomUser
 from langchain_openai import OpenAI
 from langchain.prompts import PromptTemplate
 from dotenv import load_dotenv
 import pandas as pd
 from tabulate import tabulate
+from tqdm import tqdm
 
-# Generation settings
-NUM_PERSONAS = 5
-PERSONAS_FILE = "data/personas.csv"
-# LLM settings for generating person descriptions
-MODEL = "gpt-3.5-turbo-instruct"
-TEMPERATURE = 0.7
-DESCRIPTION_TOKENS = 250
+from config import PERSONAS_FILE, NUM_PERSONAS, TEMPERATURE_PERSONAS, TOKENS_PERSONAS, MODEL_PERSONAS
 
 # Load OPENAI_API_KEY from .env file
 load_dotenv()
@@ -29,6 +26,7 @@ def generate_random_personas(num_personas):
     person_list = RandomUser.generate_users(num_personas)
     personas_dicts = [
         {
+            "id": uuid.uuid1(),
             "name": person.get_full_name(),
             "age": person.get_age(),
             "gender": person.get_gender(),
@@ -66,7 +64,7 @@ def generate_person_description(keywords_dict):
         template=template
     )
 
-    llm = OpenAI(temperature=TEMPERATURE, model_name=MODEL, max_tokens=DESCRIPTION_TOKENS)
+    llm = OpenAI(temperature=TEMPERATURE_PERSONAS, model_name=MODEL_PERSONAS, max_tokens=TOKENS_PERSONAS)
     chain = prompt | llm
     result = chain.invoke(keywords_dict)
 
@@ -82,10 +80,11 @@ def generate_personas(num_personas, output_file):
         output_file (str): Path to the output CSV file
     """
     # 1. Generate random person keywords
+    print("Generating random persona keywords")
     personas = generate_random_personas(num_personas)
 
     # 2. Generate descriptions for each person based on these keywords
-    for person in personas:
+    for person in tqdm(personas, total=len(personas), desc="Generating persona descriptions"):
         try:
             description = generate_person_description(person)
             person['description'] = description
@@ -119,6 +118,8 @@ if __name__ == "__main__":
     try:
         # Generate personas and export to CSV
         output_file = PERSONAS_FILE
+
+        print(f"Generating {NUM_PERSONAS} random personas")
         personas = generate_personas(NUM_PERSONAS, output_file)
 
         # Example result

@@ -1,25 +1,24 @@
-import json
+import warnings
 from typing import List
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 import pandas as pd
 from dotenv import load_dotenv
+from tqdm import tqdm
 
+from config import QUESTIONNAIRES_FILE, TEMPERATURE_QUESTIONNAIRE, MODEL_QUESTIONNAIRES
 from get_personas import PERSONAS_FILE
-from questionnaire import FoodAndActivityPreferences
+from structs.questionnaire import FoodAndActivityQuestionnaire
 
-PREFERENCES_FILE = "data/preferences.csv"
-MODEL = "gpt-3.5-turbo"
-TEMPERATURE = 0.2
 
 # Load environment variables
 load_dotenv()
 
 
-def create_preferences_prompt(instructions: str, persona: str, query: str) -> str:
+def create_questionnaire_prompt(instructions: str, persona: str, query: str) -> str:
     """
-    Create a prompt template for food and activity preferences.
+    Create a prompt template for food and activity questionnaires.
 
     Args:
         instructions (str): Specific instructions for the model
@@ -38,13 +37,13 @@ def create_preferences_prompt(instructions: str, persona: str, query: str) -> st
 
     return prompt
 
-def get_structured_preferences(
+def get_structured_questionnaire(
         instructions: str,
         persona: str,
         query: str,
-) -> FoodAndActivityPreferences:
+) -> FoodAndActivityQuestionnaire:
     """
-    Get structured food and activity preferences using LangChain.
+    Get structured food and activity questionnaires using LangChain.
 
     Args:
         instructions (str): Specific instructions for the model
@@ -55,40 +54,41 @@ def get_structured_preferences(
         use_json_mode (bool): Whether to use JSON mode instead of function calling
 
     Returns:
-        FoodAndActivityPreferences: Structured preferences
+        FoodAndActivityQuestionnaire: Structured questionnaires
     """
-    model = ChatOpenAI(temperature=TEMPERATURE, model_name=MODEL)
+    with warnings.catch_warnings():
+        # Ignore warning about model when using 3.5 turbo
+        warnings.filterwarnings("ignore", category=UserWarning)
 
-    structured_llm = model.with_structured_output(FoodAndActivityPreferences)
+        model = ChatOpenAI(temperature=TEMPERATURE_QUESTIONNAIRE, model_name=MODEL_QUESTIONNAIRES)
 
-    prompt = create_preferences_prompt(instructions, persona, query)
+        structured_llm = model.with_structured_output(FoodAndActivityQuestionnaire)
 
-    print(instructions)
-    print(persona)
-    print(query)
+        prompt = create_questionnaire_prompt(instructions, persona, query)
 
-    return structured_llm.invoke(prompt)
+        return structured_llm.invoke(prompt)
 
 def remove_breaks(text):
     # Remove empty lines and join all lines
     return ' '.join(line.strip() for line in text.splitlines() if line.strip())
 
 
-def preferences_to_dataframe(personas_df: pd.DataFrame,
-                             preferences_list: List[FoodAndActivityPreferences]) -> pd.DataFrame:
-    # Convert each preferences object to a dictionary
-    preferences_dicts = [prefs.model_dump() for prefs in preferences_list]
+def questionnaires_to_dataframe(personas_df: pd.DataFrame,
+                                questionnaires_list: List[FoodAndActivityQuestionnaire]) -> pd.DataFrame:
+    # Convert each questionnaires object to a dictionary
+    questionnaires_dicts = [prefs.model_dump() for prefs in questionnaires_list]
 
-    # Create DataFrame from preferences
-    preferences_df = pd.DataFrame(preferences_dicts)
+    # Create DataFrame from questionnaires
+    questionnaires_df = pd.DataFrame(questionnaires_dicts)
 
-    # Add persona information
-    results_df = pd.concat([
-        personas_df.reset_index(drop=True),
-        preferences_df
-    ], axis=1)
+    # Add uuid from personas_df to questionnaires_df
+    questionnaires_df['id'] = personas_df['id']
 
-    return results_df
+    # Reorder columns so that 'id' is the first column
+    cols = ['id'] + [col for col in questionnaires_df.columns if col != 'id']
+    questionnaires_df = questionnaires_df[cols]
+
+    return questionnaires_df
 
 
 # Example usage
@@ -111,16 +111,15 @@ if __name__ == "__main__":
 
     personas_df = pd.read_csv(PERSONAS_FILE)
 
-    preferences_results = []
-    for _, person in personas_df.iterrows():
+    questionnaires_results = []
+    for _, person in tqdm(personas_df.iterrows(), total=len(personas_df), desc="Generating questionnaires"):
         description = person['description']
-        preferences = get_structured_preferences(
+        questionnaire = get_structured_questionnaire(
             instructions=remove_breaks(instructions),
             persona=remove_breaks(description),
             query=query
         )
-        preferences_results.append(preferences)
-        print(preferences)
+        questionnaires_results.append(questionnaire)
 
-    results_df = preferences_to_dataframe(personas_df, preferences_results)
-    results_df.to_csv(PREFERENCES_FILE, index=False)
+    results_df = questionnaires_to_dataframe(personas_df, questionnaires_results)
+    results_df.to_csv(QUESTIONNAIRES_FILE, index=False)
