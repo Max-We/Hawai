@@ -82,10 +82,10 @@ def questionnaires_to_dataframe(personas_df: pd.DataFrame,
     questionnaires_df = pd.DataFrame(questionnaires_dicts)
 
     # Add uuid from personas_df to questionnaires_df
-    questionnaires_df['id'] = personas_df['id']
+    questionnaires_df['uuid'] = personas_df['uuid']
 
-    # Reorder columns so that 'id' is the first column
-    cols = ['id'] + [col for col in questionnaires_df.columns if col != 'id']
+    # Reorder columns so that 'uuid' is the first column
+    cols = ['uuid'] + [col for col in questionnaires_df.columns if col != 'uuid']
     questionnaires_df = questionnaires_df[cols]
 
     return questionnaires_df

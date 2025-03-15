@@ -26,7 +26,7 @@ def generate_random_personas(num_personas):
     person_list = RandomUser.generate_users(num_personas)
     personas_dicts = [
         {
-            "id": uuid.uuid1(),
+            "uuid": uuid.uuid4(),
             "name": person.get_full_name(),
             "age": person.get_age(),
             "gender": person.get_gender(),

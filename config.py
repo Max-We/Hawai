@@ -8,7 +8,11 @@ NUM_PERSONAS = 5
 MODEL_QUESTIONNAIRES = "gpt-3.5-turbo"
 TEMPERATURE_QUESTIONNAIRE = 0.2
 
+# Step 3: Entropy sampling & rating
+MODEL_RATING = "gpt-3.5-turbo"
+TEMPERATURE_RATING = 0.2
+
 # Data files
 PERSONAS_FILE = "data/personas.csv"
 QUESTIONNAIRES_FILE = "data/questionnaires.csv"
-
+RATINGS_FILE = "data/ratings.csv"
