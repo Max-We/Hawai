@@ -98,6 +98,8 @@ if __name__ == "__main__":
         item_titles = ratings_df[ratings_df['uuid'] == uuid]['item_title']
         item_ingredients = ratings_df[ratings_df['uuid'] == uuid]['item_ingredients']
         ratings = ratings_df[ratings_df['uuid'] == uuid]['rating']
+        # Transform rating range from -2,2 to 1,9
+        ratings = (ratings*2) + 5 # 5 is avg rating of 1-9
 
         data_string = ""
         for i in range(len(item_titles)):
