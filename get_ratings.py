@@ -12,6 +12,7 @@ from scipy.sparse.linalg import svds
 from sklearn.neighbors import NearestNeighbors
 from tqdm import tqdm
 
+import config
 from config import QUESTIONNAIRES_FILE, TEMPERATURE_RATING, MODEL_RATING, RATINGS_FILE
 from get_questionnaires import remove_breaks
 from structs.questionnaire import FoodAndActivityQuestionnaire
@@ -63,7 +64,7 @@ def load_user_item_matrix():
     data = pd.concat([train_data, eval_data, test_data], ignore_index=True)
     data = rename_and_drop_columns(data)
 
-    threshold = 30
+    threshold = config.MIN_INTERACTIONS
 
     # 1) Items filtern, die mindestens * Interaktionen haben:
     min_item_interactions = threshold
