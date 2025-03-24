@@ -106,7 +106,7 @@ def get_rating(item_idx, items_information, questionnaire):
 
     # print(f"Item: {item_name}, Ingredients: {item_ingredients}, Rating: {rating}, Rating original {rating_response.rating}")
 
-    return rating
+    return rating, item_name, item_ingredients
 
 def active_learning_loop(user_item_matrix, items_information, idx_lookup_dict, questionnaire, n_iterations, n_factors, k_neighbors, latent_neighbor):
     n_users, n_items = user_item_matrix.shape
@@ -146,13 +146,13 @@ def active_learning_loop(user_item_matrix, items_information, idx_lookup_dict, q
 
         # Ask oracle to rate the new item
         item_idx = idx_lookup_dict[selected_item_id] # convert user-item matrix id to original (sparse df) id
-        rating = get_rating(item_idx, items_information, questionnaire)
+        rating, title, ingredients = get_rating(item_idx, items_information, questionnaire)
         # Update user vector & latent representation
         user_vector[selected_item_id] = rating
         not_rated_mask[selected_item_id] = 0
         user_latent = np.dot(user_vector, np.dot(Vt.T, np.diag(1.0 / sigma)))
         # Add to summary
-        summary.append((item_idx, rating))
+        summary.append((item_idx, rating, title, ingredients))
 
     return summary
 
@@ -270,8 +270,14 @@ if __name__ == "__main__":
             k_neighbors=50,
             latent_neighbor=False
         )
-        for item_id, rating in item_ratings:
-            rows.append({"uuid": questionnaire_row["uuid"], "item_id": item_id, "rating": rating})
+        for item_id, rating, title, ingredients in item_ratings:
+            rows.append({
+                "uuid": questionnaire_row["uuid"],
+                "item_id": item_id,
+                "rating": rating,
+                "item_title": title,
+                "item_ingredients": ingredients
+            })
 
     # create df with user id, item id, rating
     ratings_df = pd.DataFrame(rows)

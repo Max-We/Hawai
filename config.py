@@ -15,4 +15,5 @@ TEMPERATURE_RATING = 0.2
 # Data files
 PERSONAS_FILE = "data/personas.csv"
 QUESTIONNAIRES_FILE = "data/questionnaires.csv"
+QUESTIONNAIRES_RECONSTRUCTED_FILE = "data/questionnaires_reconstructed.csv"
 RATINGS_FILE = "data/ratings.csv"
