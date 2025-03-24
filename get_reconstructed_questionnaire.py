@@ -101,6 +101,7 @@ if __name__ == "__main__":
         # Transform rating range from -2,2 to 1,9
         ratings = (ratings*2) + 5 # 5 is avg rating of 1-9
 
+        # Resulting format: "{title: 'a', ingredients: 'b', rating: 'c'}, {title: 'd', ...}, ..."
         data_string = ""
         for i in range(len(item_titles)):
             data_string += "{"
