@@ -1,3 +1,4 @@
+import math
 import os
 import random
 import warnings
@@ -87,25 +88,22 @@ def load_user_item_matrix():
 
     return user_item_matrix_norm, position_to_item
 
-def normalize(data, lower_b=-2, upper_b=2):
-    if isinstance(data, (int, float)):
-        minimum, maximum = 1, 5 # from the llm instructions
-    else:
-        minimum, maximum = min(data), max(data)
-
-    return lower_b + (upper_b - lower_b) * (data - minimum) / (maximum - minimum)
+def project(data):
+    # project from 1,9 to -2,2
+    # [1,2]: -2, [3,4]: -1, [5]: 0, [6,7]: 1, [8,9]: 2
+    return math.ceil(abs((data-5)/2)) * (-1 if data < 5 else 1)
 
 def get_rating(item_idx, items_information, questionnaire):
-    instructions = """Given a person with the previous food and activity preferences, on a scale from 1 to 5, rate how he / she would rate the following recipe. Use the full range (1 to 5) in your answer"""
-    query = "How would this person rate this recipe, on a scale from 1 to 5?"
+    instructions = """Given a person with the previous food and activity preferences, on a scale from 1 to 9, rate how he / she would rate the following recipe."""
+    query = "How would this person rate this recipe, on a scale from 1 to 9?"
 
     item_name = items_information.loc[item_idx]["name"]
     item_ingredients = items_information.loc[item_idx]["ingredients"]
 
     rating_response = get_llm_recipe_rating(instructions, questionnaire, item_name, item_ingredients, query)
-    rating = normalize(rating_response.rating)
+    rating = project(rating_response.rating)
 
-    # print(f"Item: {item_name}, Ingredients: {item_ingredients}, Rating: {rating}, Rating original {rating_response.rating}")
+    # print(f"Item: {item_name}, Rating (1-9) {rating_response.rating}, Projected: {rating}")
 
     return rating, item_name, item_ingredients
 
