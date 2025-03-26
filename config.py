@@ -1,7 +1,7 @@
 # Step 1: Personas
 MODEL_PERSONAS = "gpt-3.5-turbo-instruct"
 TEMPERATURE_PERSONAS = 0.7
-TOKENS_PERSONAS=250
+TOKENS_PERSONAS=350
 NUM_PERSONAS = 5
 
 # Step 2: Questionnaires
