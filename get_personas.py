@@ -93,8 +93,16 @@ def generate_person_description(keywords_dict):
     Returns:
         str: Detailed description of the person
     """
-    template = """Given the following basic information about a person, create a detailed description which describes specific eating habits, food allergies, or dietary philosophies. For example, you can mention if you follow a vegetarian, vegan, keto or other specalised diet, if you avoid gluten or dairy, or if you have allergies to nuts, shellfish, or other foods :
+    template = """Given the following basic information about a person, create a detailed description of their unique food preferences and eating habits. Include information about:
 
+    - Favorite cuisines or dishes they enjoy regularly
+    - Specific foods they particularly love or crave
+    - Foods they strongly dislike or avoid
+    - Any seasonal or time-of-day preferences for certain foods
+    - Special preparation methods they prefer (e.g., spice level, cooking styles)
+
+    The goal is to create a unique food profile that captures their individual tastes and relationship with food beyond general categories like 'vegan' or 'keto':
+    
     Name: {name}
     Age: {age}
     Country: {country}
