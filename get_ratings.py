@@ -96,7 +96,7 @@ def normalize(data, lower_b=-2, upper_b=2):
     return lower_b + (upper_b - lower_b) * (data - minimum) / (maximum - minimum)
 
 def get_rating(item_idx, items_information, questionnaire):
-    instructions = """Given a person with the following food and activity preferences, on a scale from 1 to 5, rate how he / she would rate the following recipe. Use the full range (1 to 5) in your answer"""
+    instructions = """Given a person with the previous food and activity preferences, on a scale from 1 to 5, rate how he / she would rate the following recipe. Use the full range (1 to 5) in your answer"""
     query = "How would this person rate this recipe, on a scale from 1 to 5?"
 
     item_name = items_information.loc[item_idx]["name"]
@@ -158,7 +158,7 @@ def active_learning_loop(user_item_matrix, items_information, idx_lookup_dict, q
     return summary
 
 
-def create_ratings_prompt(instructions: str, food_questionnaires: FoodAndActivityQuestionnaire, recipe_title: str, recipe_ingredients, query: str) -> str:
+def create_ratings_prompt(instructions: str, food_questionnaire: FoodAndActivityQuestionnaire, recipe_title: str, recipe_ingredients, query: str) -> str:
     """
     Create a prompt template for food and activity questionnaires.
 
@@ -170,11 +170,11 @@ def create_ratings_prompt(instructions: str, food_questionnaires: FoodAndActivit
         ChatPromptTemplate: Formatted prompt template
     """
     prompt = f"""
-    Instructions: {instructions}
-
-    Person food preferences: {food_questionnaires}
+    Person food preferences: <{food_questionnaire}>
     
-    Recipe title: {recipe_title}
+    Instructions: {instructions}
+    
+    Recipe title: <{recipe_title}>
     
     Recipe ingredients: {recipe_ingredients}
 

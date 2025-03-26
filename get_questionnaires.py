@@ -87,7 +87,7 @@ def get_structured_questionnaire_part(
                 return structured_llm.invoke(prompt)
             except Exception as e:
                 print(
-                    f"Error generating questionnaire part {part_num} for persona, retrying {i}/{n_trials}... Error: {e}")
+                    f"Error generating questionnaire part {part_num} for persona, retrying {i}/{n_trials}...")
                 if i == n_trials - 1:
                     raise e
 

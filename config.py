@@ -4,7 +4,7 @@ TEMPERATURE_PERSONAS = 0.7
 TOKENS_PERSONAS=500
 NUM_PERSONAS = 5
 
-# Step 2: Questionnaires
+# Step 2: Questionnaires (used in questionnaire generation AND reconstruction)
 MODEL_QUESTIONNAIRES = "gpt-4o-mini"
 TEMPERATURE_QUESTIONNAIRE = 0.2
 
