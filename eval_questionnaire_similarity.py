@@ -61,5 +61,5 @@ if __name__ == "__main__":
     plt.ylabel('Score')
     plt.title('Similarity Metrics Comparison')
     plt.tight_layout()
-    plt.savefig('similarity_metrics.png')
+    # plt.savefig('similarity_metrics.png')
     plt.show()
