@@ -1,51 +1,146 @@
 import warnings
 from typing import List
 
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 import pandas as pd
 from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
 from tqdm import tqdm
 
-from config import QUESTIONNAIRES_FILE, TEMPERATURE_QUESTIONNAIRE, MODEL_QUESTIONNAIRES, RATINGS_FILE, \
+from config import TEMPERATURE_QUESTIONNAIRE, MODEL_QUESTIONNAIRES, RATINGS_FILE, \
     QUESTIONNAIRES_RECONSTRUCTED_FILE
-from get_personas import PERSONAS_FILE
-from structs.questionnaire import FoodAndActivityQuestionnaire
-
+from structs.questionnaire import FoodAndActivityQuestionnaire, FoodAndActivityQuestionnairePart1, \
+    FoodAndActivityQuestionnairePart2, FoodAndActivityQuestionnairePart3, FoodAndActivityQuestionnairePart4
 
 # Load environment variables
 load_dotenv()
 
 
-def create_questionnaire_prompt(instructions: str, query: str, data_string: str) -> str:
-    """Create a prompt template for food and activity questionnaires."""
+def create_questionnaire_prompt(instructions: str, query: str, data_string: str, part_num: int) -> str:
+    """
+    Create a prompt template for a specific part of the food and activity questionnaire.
+
+    Args:
+        instructions (str): Specific instructions for the model
+        query (str): The specific query or context
+        data_string (str): Recipe ratings and ingredient data
+        part_num (int): The part number (1, 2, 3, or 4)
+
+    Returns:
+        str: Formatted prompt text
+    """
     prompt = f"""
     Instructions: {instructions}
 
     Recipe ratings: {data_string}
+
+    You are completing PART {part_num} of 4 for this questionnaire. Each part contains a different set of items.
 
     Query: {query}
     """
 
     return prompt
 
-def get_structured_questionnaire(
+
+def get_structured_questionnaire_part(
         instructions: str,
         query: str,
-        data_string: str
-) -> FoodAndActivityQuestionnaire:
-    """Get structured food and activity questionnaires using LangChain."""
+        data_string: str,
+        part_num: int
+):
+    """
+    Get a structured part of the food and activity questionnaire using LangChain.
+
+    Args:
+        instructions (str): Specific instructions for the model
+        query (str): The specific query or context
+        data_string (str): Recipe ratings and ingredient data
+        part_num (int): The part number (1, 2, 3, or 4)
+
+    Returns:
+        BaseModel: Structured questionnaire part
+    """
     with warnings.catch_warnings():
         # Ignore warning about model when using 3.5 turbo
         warnings.filterwarnings("ignore", category=UserWarning)
 
         model = ChatOpenAI(temperature=TEMPERATURE_QUESTIONNAIRE, model_name=MODEL_QUESTIONNAIRES)
 
-        structured_llm = model.with_structured_output(FoodAndActivityQuestionnaire)
+        # Choose the appropriate questionnaire part class
+        if part_num == 1:
+            questionnaire_class = FoodAndActivityQuestionnairePart1
+        elif part_num == 2:
+            questionnaire_class = FoodAndActivityQuestionnairePart2
+        elif part_num == 3:
+            questionnaire_class = FoodAndActivityQuestionnairePart3
+        else:
+            questionnaire_class = FoodAndActivityQuestionnairePart4
 
-        prompt = create_questionnaire_prompt(instructions, query, data_string)
+        structured_llm = model.with_structured_output(questionnaire_class)
 
-        return structured_llm.invoke(prompt)
+        prompt = create_questionnaire_prompt(instructions, query, data_string, part_num)
+
+        n_trials = 3
+        for i in range(n_trials):
+            try:
+                return structured_llm.invoke(prompt)
+            except Exception as e:
+                print(
+                    f"Error generating questionnaire part {part_num}, retrying {i}/{n_trials}...")
+                if i == n_trials - 1:
+                    raise e
+
+
+def merge_questionnaire_parts(part1, part2, part3, part4) -> FoodAndActivityQuestionnaire:
+    """
+    Merge the four questionnaire parts into a complete questionnaire.
+
+    Args:
+        part1 (FoodAndActivityQuestionnairePart1): Part 1 of the questionnaire
+        part2 (FoodAndActivityQuestionnairePart2): Part 2 of the questionnaire
+        part3 (FoodAndActivityQuestionnairePart3): Part 3 of the questionnaire
+        part4 (FoodAndActivityQuestionnairePart4): Part 4 of the questionnaire
+
+    Returns:
+        FoodAndActivityQuestionnaire: A complete merged questionnaire
+    """
+    # Combine all parts into a single dictionary
+    merged_dict = {}
+
+    # Add fields from each part
+    merged_dict.update(part1.model_dump())
+    merged_dict.update(part2.model_dump())
+    merged_dict.update(part3.model_dump())
+    merged_dict.update(part4.model_dump())
+
+    # Create and return a complete questionnaire
+    return FoodAndActivityQuestionnaire(**merged_dict)
+
+
+def get_complete_questionnaire(
+        instructions: str,
+        query: str,
+        data_string: str
+) -> FoodAndActivityQuestionnaire:
+    """
+    Get a complete food and activity questionnaire by generating and merging all four parts.
+
+    Args:
+        instructions (str): Specific instructions for the model
+        query (str): The specific query or context
+        data_string (str): Recipe ratings and ingredient data
+
+    Returns:
+        FoodAndActivityQuestionnaire: Complete structured questionnaire
+    """
+    # Generate each part of the questionnaire
+    part1 = get_structured_questionnaire_part(instructions, query, data_string, 1)
+    part2 = get_structured_questionnaire_part(instructions, query, data_string, 2)
+    part3 = get_structured_questionnaire_part(instructions, query, data_string, 3)
+    part4 = get_structured_questionnaire_part(instructions, query, data_string, 4)
+
+    # Merge all parts into a complete questionnaire
+    return merge_questionnaire_parts(part1, part2, part3, part4)
+
 
 def remove_breaks(text):
     # Remove empty lines and join all lines
@@ -110,7 +205,8 @@ if __name__ == "__main__":
             data_string += f"rating: '{ratings.iloc[i]}'"
             data_string += "}, "
 
-        questionnaire = get_structured_questionnaire(
+        # Generate complete questionnaire by combining all four parts
+        questionnaire = get_complete_questionnaire(
             instructions=remove_breaks(instructions),
             query=query,
             data_string=data_string
