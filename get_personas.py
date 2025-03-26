@@ -1,3 +1,4 @@
+import random
 import uuid
 
 from randomuser import RandomUser
@@ -12,6 +13,48 @@ from config import PERSONAS_FILE, NUM_PERSONAS, TEMPERATURE_PERSONAS, TOKENS_PER
 
 # Load OPENAI_API_KEY from .env file
 load_dotenv()
+
+# Diet: Probability
+DIET_OPTIONS = [
+    ("Omnivore (none)", 60),
+    ("Vegan", 5),
+    ("Vegetarian", 10),
+    ("Lactose Intolerant", 15),
+    ("Nut Allergy", 10)
+]
+assert sum(weight for _, weight in DIET_OPTIONS) == 100, "Diet options probabilities should sum to 100"
+
+def sample_dietary_preference():
+    """
+    Randomly assign a diet based on predefined probabilities.
+    Returns a single dietary preference keyword.
+    """
+    import random
+
+    choices, weights = zip(*DIET_OPTIONS)
+    return random.choices(choices, weights=weights, k=1)[0]
+
+
+def format_dietary_preference(selected_preference):
+    """
+    Format a dietary preference as a string with yes/no values.
+
+    Args:
+        selected_preference (str): The selected dietary preference
+
+    Returns:
+        str: A formatted string with the selected preference as 'yes' and others as 'no'
+    """
+    choices = [option for option, _ in DIET_OPTIONS]
+
+    result = ""
+    for option in choices:
+        value = "yes" if option == selected_preference else "no"
+        result += f"{option}: {value}, "
+
+    # Remove trailing comma and space
+    return result.rstrip(", ")
+
 
 def generate_random_personas(num_personas):
     """
@@ -31,7 +74,8 @@ def generate_random_personas(num_personas):
             "age": person.get_age(),
             "gender": person.get_gender(),
             "country": person.get_country(),
-            "city": person.get_city()
+            "city": person.get_city(),
+            "dietary_preference": sample_dietary_preference()
         } for person in person_list
     ]
     return personas_dicts
@@ -56,13 +100,15 @@ def generate_person_description(keywords_dict):
     Country: {country}
     City: {city}
     Gender: {gender}
+    Dietary Preference: {dietary_preference_string}
 
     Detailed description:"""
 
     prompt = PromptTemplate(
-        input_variables=["name", "age", "country", "city", "gender"],
+        input_variables=["name", "age", "country", "city", "gender", "dietary_preference_string"],
         template=template
     )
+    keywords_dict["dietary_preference_string"] = format_dietary_preference(keywords_dict["dietary_preference"])
 
     llm = OpenAI(temperature=TEMPERATURE_PERSONAS, model_name=MODEL_PERSONAS, max_tokens=TOKENS_PERSONAS)
     chain = prompt | llm
