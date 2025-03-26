@@ -1,3 +1,4 @@
+import random
 import warnings
 from typing import List
 
@@ -16,6 +17,11 @@ from structs.questionnaire import FoodAndActivityQuestionnaire
 load_dotenv()
 
 
+def sample_questionnaire_field():
+    # Return str of a random field of the FoodAndActivityQuestionnaire struct
+    return random.choice(list(FoodAndActivityQuestionnaire.__annotations__.keys()))
+
+
 def create_questionnaire_prompt(instructions: str, persona: str, query: str) -> str:
     """
     Create a prompt template for food and activity questionnaires.
@@ -28,9 +34,9 @@ def create_questionnaire_prompt(instructions: str, persona: str, query: str) -> 
         ChatPromptTemplate: Formatted prompt template
     """
     prompt = f"""
+    Persona: <{persona}>
+    
     Instructions: {instructions}
-
-    Persona: {persona}
 
     Query: {query}
     """
@@ -66,7 +72,12 @@ def get_structured_questionnaire(
 
         prompt = create_questionnaire_prompt(instructions, persona, query)
 
-        return structured_llm.invoke(prompt)
+        n_trials = 3
+        for i in range(3):
+            try:
+                return structured_llm.invoke(prompt)
+            except Exception:
+                print(f"Error generating questionnaire for persona, retrying {i}/{n_trials}...")
 
 def remove_breaks(text):
     # Remove empty lines and join all lines
@@ -94,20 +105,26 @@ def questionnaires_to_dataframe(personas_df: pd.DataFrame,
 # Example usage
 if __name__ == "__main__":
     # Example instructions and persona
-    instructions = """
-    On a scale from 1 (extremely dislike) to 9 (extremely like), please rate how much the persona LIKES each 
+    instructions = f"""
+    On a scale from 1 (extremely dislike) to 9 (extremely like), please rate how much the persona LIKES or DISLIKES each 
     presented item. The more the persona likes the item the higher you should rate it. The less the persona likes the 
     item, the lower you should rate it. If you are unfamiliar with any of the foods or the persona hasn't tried 
     any of the activities please answer 10 (never tried). If the persona prefers not to answer an item please 
     select 11 (prefer not to answer). You will notice that some of the items are 
     not food related. It is very important to us that you respond to these items using the same 
-    parameters as you use for foods. Please remember that we would like you to report how much you 
-    like each food or activity NOT how many time you eat each food or undertake each activity. 
+    parameters as you use for foods. Please remember that we would like you to report how much the person 
+    likes each food or activity NOT how many time he/she eats each food or undertakes each activity. 
     The answers to this questionnaire should fit to the persona specified in the persona section.
-    use the description part and use the full skale.
     """
 
-    query = "What would be this person's likely food and activity preferences?"
+    # Examples (NOT related to this specific persona):
+    #
+    # {sample_questionnaire_field()}: 5
+    # {sample_questionnaire_field()}: 1
+    # {sample_questionnaire_field()}: 9
+    # {sample_questionnaire_field()}: 2
+
+    query = "What would be this person's likely food and activity preferences? Use the description and use the full scale (1-9)."
 
     personas_df = pd.read_csv(PERSONAS_FILE)
 
