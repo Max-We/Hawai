@@ -1,15 +1,15 @@
 # Step 1: Personas
-MODEL_PERSONAS = "gpt-3.5-turbo-instruct"
+MODEL_PERSONAS = "gpt-4o-mini"
 TEMPERATURE_PERSONAS = 0.7
-TOKENS_PERSONAS=350
+TOKENS_PERSONAS=500
 NUM_PERSONAS = 5
 
 # Step 2: Questionnaires
-MODEL_QUESTIONNAIRES = "gpt-3.5-turbo"
+MODEL_QUESTIONNAIRES = "gpt-4o-mini"
 TEMPERATURE_QUESTIONNAIRE = 0.2
 
 # Step 3: Entropy sampling & rating
-MODEL_RATING = "gpt-3.5-turbo"
+MODEL_RATING = "gpt-4o-mini"
 TEMPERATURE_RATING = 0.2
 
 # Data files

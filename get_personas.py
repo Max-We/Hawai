@@ -1,11 +1,10 @@
-import random
 import uuid
 
-from randomuser import RandomUser
-from langchain_openai import OpenAI
-from langchain.prompts import PromptTemplate
-from dotenv import load_dotenv
 import pandas as pd
+from dotenv import load_dotenv
+from langchain.prompts import PromptTemplate
+from langchain_openai import ChatOpenAI
+from randomuser import RandomUser
 from tabulate import tabulate
 from tqdm import tqdm
 
@@ -98,7 +97,6 @@ def generate_person_description(keywords_dict):
     - Favorite cuisines or dishes they enjoy regularly
     - Specific foods they particularly love or crave
     - Foods they strongly dislike or avoid
-    - Any seasonal or time-of-day preferences for certain foods
     - Special preparation methods they prefer (e.g., spice level, cooking styles)
 
     The goal is to create a unique food profile that captures their individual tastes and relationship with food beyond general categories like 'vegan' or 'keto':
@@ -110,7 +108,7 @@ def generate_person_description(keywords_dict):
     Gender: {gender}
     Dietary Preference: {dietary_preference_string}
 
-    Detailed description:"""
+    Detailed description (not formatted, plain text):"""
 
     prompt = PromptTemplate(
         input_variables=["name", "age", "country", "city", "gender", "dietary_preference_string"],
@@ -118,11 +116,11 @@ def generate_person_description(keywords_dict):
     )
     keywords_dict["dietary_preference_string"] = format_dietary_preference(keywords_dict["dietary_preference"])
 
-    llm = OpenAI(temperature=TEMPERATURE_PERSONAS, model_name=MODEL_PERSONAS, max_tokens=TOKENS_PERSONAS)
+    llm = ChatOpenAI(temperature=TEMPERATURE_PERSONAS, model_name=MODEL_PERSONAS, max_tokens=TOKENS_PERSONAS)
     chain = prompt | llm
     result = chain.invoke(keywords_dict)
 
-    return result.strip()
+    return result.content.strip()
 
 
 def generate_personas(num_personas, output_file):

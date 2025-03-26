@@ -10,57 +10,78 @@ from tqdm import tqdm
 
 from config import QUESTIONNAIRES_FILE, TEMPERATURE_QUESTIONNAIRE, MODEL_QUESTIONNAIRES
 from get_personas import PERSONAS_FILE
-from structs.questionnaire import FoodAndActivityQuestionnaire
-
+from structs.questionnaire import FoodAndActivityQuestionnaire, FoodAndActivityQuestionnairePart1, \
+    FoodAndActivityQuestionnairePart2, FoodAndActivityQuestionnairePart3, FoodAndActivityQuestionnairePart4
 
 # Load environment variables
 load_dotenv()
 
 
-def sample_questionnaire_field():
-    # Return str of a random field of the FoodAndActivityQuestionnaire struct
-    return random.choice(list(FoodAndActivityQuestionnaire.__annotations__.keys()))
-
-
-def create_questionnaire_prompt(instructions: str, persona: str, query: str) -> str:
+def sample_questionnaire_field(part_num=None):
     """
-    Create a prompt template for food and activity questionnaires.
+    Return str of a random field from a specific part of the questionnaire or from the whole questionnaire.
+
+    Args:
+        part_num (int, optional): Part number (1, 2, 3, or 4) to sample from. If None, samples from all fields.
+
+    Returns:
+        str: A randomly selected field name
+    """
+    if part_num == 1:
+        return random.choice(list(FoodAndActivityQuestionnairePart1.__annotations__.keys()))
+    elif part_num == 2:
+        return random.choice(list(FoodAndActivityQuestionnairePart2.__annotations__.keys()))
+    elif part_num == 3:
+        return random.choice(list(FoodAndActivityQuestionnairePart3.__annotations__.keys()))
+    elif part_num == 4:
+        return random.choice(list(FoodAndActivityQuestionnairePart4.__annotations__.keys()))
+    else:
+        return random.choice(list(FoodAndActivityQuestionnaire.__annotations__.keys()))
+
+
+def create_questionnaire_prompt(instructions: str, persona: str, query: str, part_num: int) -> str:
+    """
+    Create a prompt template for a specific part of the food and activity questionnaire.
 
     Args:
         instructions (str): Specific instructions for the model
         persona (str): Description of the persona to adopt
+        query (str): The specific query or context
+        part_num (int): The part number (1, 2, 3, or 4)
 
     Returns:
-        ChatPromptTemplate: Formatted prompt template
+        str: Formatted prompt text
     """
     prompt = f"""
     Persona: <{persona}>
-    
+
     Instructions: {instructions}
+
+    You are completing PART {part_num} of 4 for this questionnaire. Each part contains a different set of items.
 
     Query: {query}
     """
 
     return prompt
 
-def get_structured_questionnaire(
+
+def get_structured_questionnaire_part(
         instructions: str,
         persona: str,
         query: str,
-) -> FoodAndActivityQuestionnaire:
+        part_num: int
+):
     """
-    Get structured food and activity questionnaires using LangChain.
+    Get a structured part of the food and activity questionnaire using LangChain.
 
     Args:
         instructions (str): Specific instructions for the model
         persona (str): Description of the persona to adopt
         query (str): The specific query or context
-        model_name (str): OpenAI model to use
-        temperature (float): Model temperature (0.0 = deterministic)
-        use_json_mode (bool): Whether to use JSON mode instead of function calling
+        part_num (int): The part number (1, 2, 3, or 4)
 
     Returns:
-        FoodAndActivityQuestionnaire: Structured questionnaires
+        BaseModel: Structured questionnaire part
     """
     with warnings.catch_warnings():
         # Ignore warning about model when using 3.5 turbo
@@ -68,16 +89,82 @@ def get_structured_questionnaire(
 
         model = ChatOpenAI(temperature=TEMPERATURE_QUESTIONNAIRE, model_name=MODEL_QUESTIONNAIRES)
 
-        structured_llm = model.with_structured_output(FoodAndActivityQuestionnaire)
+        # Choose the appropriate questionnaire part class
+        if part_num == 1:
+            questionnaire_class = FoodAndActivityQuestionnairePart1
+        elif part_num == 2:
+            questionnaire_class = FoodAndActivityQuestionnairePart2
+        elif part_num == 3:
+            questionnaire_class = FoodAndActivityQuestionnairePart3
+        else:
+            questionnaire_class = FoodAndActivityQuestionnairePart4
 
-        prompt = create_questionnaire_prompt(instructions, persona, query)
+        structured_llm = model.with_structured_output(questionnaire_class)
+
+        prompt = create_questionnaire_prompt(instructions, persona, query, part_num)
 
         n_trials = 3
-        for i in range(3):
+        for i in range(n_trials):
             try:
                 return structured_llm.invoke(prompt)
-            except Exception:
-                print(f"Error generating questionnaire for persona, retrying {i}/{n_trials}...")
+            except Exception as e:
+                print(
+                    f"Error generating questionnaire part {part_num} for persona, retrying {i}/{n_trials}... Error: {e}")
+                if i == n_trials - 1:
+                    raise e
+
+
+def merge_questionnaire_parts(part1, part2, part3, part4) -> FoodAndActivityQuestionnaire:
+    """
+    Merge the four questionnaire parts into a complete questionnaire.
+
+    Args:
+        part1 (FoodAndActivityQuestionnairePart1): Part 1 of the questionnaire
+        part2 (FoodAndActivityQuestionnairePart2): Part 2 of the questionnaire
+        part3 (FoodAndActivityQuestionnairePart3): Part 3 of the questionnaire
+        part4 (FoodAndActivityQuestionnairePart4): Part 4 of the questionnaire
+
+    Returns:
+        FoodAndActivityQuestionnaire: A complete merged questionnaire
+    """
+    # Combine all parts into a single dictionary
+    merged_dict = {}
+
+    # Add fields from each part
+    merged_dict.update(part1.model_dump())
+    merged_dict.update(part2.model_dump())
+    merged_dict.update(part3.model_dump())
+    merged_dict.update(part4.model_dump())
+
+    # Create and return a complete questionnaire
+    return FoodAndActivityQuestionnaire(**merged_dict)
+
+
+def get_complete_questionnaire(
+        instructions: str,
+        persona: str,
+        query: str
+) -> FoodAndActivityQuestionnaire:
+    """
+    Get a complete food and activity questionnaire by generating and merging all four parts.
+
+    Args:
+        instructions (str): Specific instructions for the model
+        persona (str): Description of the persona to adopt
+        query (str): The specific query or context
+
+    Returns:
+        FoodAndActivityQuestionnaire: Complete structured questionnaire
+    """
+    # Generate each part of the questionnaire
+    part1 = get_structured_questionnaire_part(instructions, persona, query, 1)
+    part2 = get_structured_questionnaire_part(instructions, persona, query, 2)
+    part3 = get_structured_questionnaire_part(instructions, persona, query, 3)
+    part4 = get_structured_questionnaire_part(instructions, persona, query, 4)
+
+    # Merge all parts into a complete questionnaire
+    return merge_questionnaire_parts(part1, part2, part3, part4)
+
 
 def remove_breaks(text):
     # Remove empty lines and join all lines
@@ -116,13 +203,41 @@ if __name__ == "__main__":
     likes each food or activity NOT how many time he/she eats each food or undertakes each activity. 
     The answers to this questionnaire should fit to the persona specified in the persona section.
     """
-
-    # Examples (NOT related to this specific persona):
     #
-    # {sample_questionnaire_field()}: 5
-    # {sample_questionnaire_field()}: 1
-    # {sample_questionnaire_field()}: 9
-    # {sample_questionnaire_field()}: 2
+    # # Add examples for each part to make it more clear
+    # part1_example = f"""
+    # Examples (NOT related to this specific persona) for Part 1:
+    # {sample_questionnaire_field(1)}: 5
+    # {sample_questionnaire_field(1)}: 1
+    # {sample_questionnaire_field(1)}: 9
+    # """
+    #
+    # part2_example = f"""
+    # Examples (NOT related to this specific persona) for Part 2:
+    # {sample_questionnaire_field(2)}: 3
+    # {sample_questionnaire_field(2)}: 7
+    # {sample_questionnaire_field(2)}: 2
+    # """
+    #
+    # part3_example = f"""
+    # Examples (NOT related to this specific persona) for Part 3:
+    # {sample_questionnaire_field(3)}: 8
+    # {sample_questionnaire_field(3)}: 4
+    # {sample_questionnaire_field(3)}: 10
+    # """
+    #
+    # part4_example = f"""
+    # Examples (NOT related to this specific persona) for Part 4:
+    # {sample_questionnaire_field(4)}: 6
+    # {sample_questionnaire_field(4)}: 11
+    # {sample_questionnaire_field(4)}: 2
+    # """
+    #
+    # # Update instructions with part-specific examples
+    # instructions_part1 = instructions + part1_example
+    # instructions_part2 = instructions + part2_example
+    # instructions_part3 = instructions + part3_example
+    # instructions_part4 = instructions + part4_example
 
     query = "What would be this person's likely food and activity preferences? Use the description and use the full scale (1-9)."
 
@@ -131,11 +246,14 @@ if __name__ == "__main__":
     questionnaires_results = []
     for _, person in tqdm(personas_df.iterrows(), total=len(personas_df), desc="Generating questionnaires"):
         description = person['description']
-        questionnaire = get_structured_questionnaire(
+
+        # Generate complete questionnaire by combining all four parts
+        questionnaire = get_complete_questionnaire(
             instructions=remove_breaks(instructions),
             persona=remove_breaks(description),
             query=query
         )
+
         questionnaires_results.append(questionnaire)
 
     results_df = questionnaires_to_dataframe(personas_df, questionnaires_results)
