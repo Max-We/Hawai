@@ -17,28 +17,6 @@ from structs.questionnaire import FoodAndActivityQuestionnaire, FoodAndActivityQ
 load_dotenv()
 
 
-def sample_questionnaire_field(part_num=None):
-    """
-    Return str of a random field from a specific part of the questionnaire or from the whole questionnaire.
-
-    Args:
-        part_num (int, optional): Part number (1, 2, 3, or 4) to sample from. If None, samples from all fields.
-
-    Returns:
-        str: A randomly selected field name
-    """
-    if part_num == 1:
-        return random.choice(list(FoodAndActivityQuestionnairePart1.__annotations__.keys()))
-    elif part_num == 2:
-        return random.choice(list(FoodAndActivityQuestionnairePart2.__annotations__.keys()))
-    elif part_num == 3:
-        return random.choice(list(FoodAndActivityQuestionnairePart3.__annotations__.keys()))
-    elif part_num == 4:
-        return random.choice(list(FoodAndActivityQuestionnairePart4.__annotations__.keys()))
-    else:
-        return random.choice(list(FoodAndActivityQuestionnaire.__annotations__.keys()))
-
-
 def create_questionnaire_prompt(instructions: str, persona: str, query: str, part_num: int) -> str:
     """
     Create a prompt template for a specific part of the food and activity questionnaire.
@@ -203,41 +181,6 @@ if __name__ == "__main__":
     likes each food or activity NOT how many time he/she eats each food or undertakes each activity. 
     The answers to this questionnaire should fit to the persona specified in the persona section.
     """
-    #
-    # # Add examples for each part to make it more clear
-    # part1_example = f"""
-    # Examples (NOT related to this specific persona) for Part 1:
-    # {sample_questionnaire_field(1)}: 5
-    # {sample_questionnaire_field(1)}: 1
-    # {sample_questionnaire_field(1)}: 9
-    # """
-    #
-    # part2_example = f"""
-    # Examples (NOT related to this specific persona) for Part 2:
-    # {sample_questionnaire_field(2)}: 3
-    # {sample_questionnaire_field(2)}: 7
-    # {sample_questionnaire_field(2)}: 2
-    # """
-    #
-    # part3_example = f"""
-    # Examples (NOT related to this specific persona) for Part 3:
-    # {sample_questionnaire_field(3)}: 8
-    # {sample_questionnaire_field(3)}: 4
-    # {sample_questionnaire_field(3)}: 10
-    # """
-    #
-    # part4_example = f"""
-    # Examples (NOT related to this specific persona) for Part 4:
-    # {sample_questionnaire_field(4)}: 6
-    # {sample_questionnaire_field(4)}: 11
-    # {sample_questionnaire_field(4)}: 2
-    # """
-    #
-    # # Update instructions with part-specific examples
-    # instructions_part1 = instructions + part1_example
-    # instructions_part2 = instructions + part2_example
-    # instructions_part3 = instructions + part3_example
-    # instructions_part4 = instructions + part4_example
 
     query = "What would be this person's likely food and activity preferences? Use the description and use the full scale (1-9)."
 
