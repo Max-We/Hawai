@@ -91,7 +91,7 @@ def plot_krippendorff_analysis(results, output_dir=EVAL_PLOTS):
 
     ax1.set_xlabel("Mean Krippendorff's Alpha (α)")
     ax1.set_title("Recommender System Performance")
-    ax1.set_xlim(0, max(means) * 1.2)
+    ax1.set_xlim(min(min(means), 0) * 1.2, max(max(means), 0) * 1.2)
 
     # 2. Boxplot for distribution
     box_data = [results[algo]['values'] for algo in algorithms]
