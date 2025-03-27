@@ -109,6 +109,37 @@ def get_rating(item_idx, items_information, questionnaire):
 
     return rating, item_name, item_ingredients
 
+
+def random_learning_loop(user_item_matrix, items_information, idx_lookup_dict, questionnaire, n_iterations):
+    n_items = user_item_matrix.shape[1]
+
+    # Iterative random selection process
+    summary = []
+    user_vector = np.zeros(n_items)
+    not_rated_mask = np.ones(n_items, dtype=bool)
+
+    for _ in range(n_iterations):
+        # Find indices of unrated items
+        unrated_indices = np.where(not_rated_mask==1)[0]
+
+        selected_item_id, item_idx = None, None
+        while item_idx not in items_information.index or item_idx is None:
+            # Try until a valid index is selected
+            selected_item_id = np.random.choice(unrated_indices)
+            item_idx = idx_lookup_dict[selected_item_id]
+
+        # Ask oracle to rate the new item
+        rating, title, ingredients = get_rating(item_idx, items_information, questionnaire)
+
+        # Update user vector and mask
+        user_vector[selected_item_id] = rating
+        not_rated_mask[selected_item_id] = False
+
+        summary.append((item_idx, rating, title, ingredients))
+
+    return summary
+
+
 def active_learning_loop(user_item_matrix, items_information, idx_lookup_dict, questionnaire, n_iterations, n_factors, k_neighbors, latent_neighbor):
     n_users, n_items = user_item_matrix.shape
 
@@ -251,7 +282,6 @@ def process_questionnaire(questionnaire_row, user_item_matrix, items_information
     # convert to questionnaire object
     questionnaire = df_row_to_questionnaire(questionnaire_row)
 
-    # pick an item to rate
     item_ratings = active_learning_loop(
         user_item_matrix=user_item_matrix,
         items_information=items_information,
@@ -262,6 +292,14 @@ def process_questionnaire(questionnaire_row, user_item_matrix, items_information
         k_neighbors=50,
         latent_neighbor=False
     )
+
+    # item_ratings = random_learning_loop(
+    #     user_item_matrix=user_item_matrix,
+    #     items_information=items_information,
+    #     idx_lookup_dict=idx_lookup_dict,
+    #     questionnaire=questionnaire,
+    #     n_iterations=15
+    # )
 
     # Create rows for this questionnaire
     questionnaire_rows = []
@@ -310,13 +348,9 @@ if __name__ == "__main__":
                 total=len(questionnaires_df),
                 desc="Rating items for each user"
         ):
-            try:
-                # Get results from this task
-                questionnaire_rows = future.result()
-                all_rows.extend(questionnaire_rows)
-            except Exception as exc:
-                idx = future_to_questionnaire[future]
-                print(f"Questionnaire at index {idx} generated an exception: {exc}")
+            # Get results from this task
+            questionnaire_rows = future.result()
+            all_rows.extend(questionnaire_rows)
 
     # Create df with user id, item id, rating
     ratings_df = pd.DataFrame(all_rows)
