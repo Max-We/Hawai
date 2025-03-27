@@ -1,5 +1,6 @@
 import concurrent.futures
 import os
+import random
 import re
 import warnings
 from functools import partial
@@ -264,49 +265,65 @@ if __name__ == "__main__":
     ratings_df = pd.read_csv(RATINGS_FILE)
     uuids = ratings_df['uuid'].unique()
 
-    recommendations_dfs = [("none", "")] # ratings only, no recommender algorithm
-    # recommendations_dfs = []
+    recommendations_dfs = [
+        ("none", ""),   # ratings only, no recommender algorithm
+        ("random", "")  # fully random questionnaire (serves as baseline)
+    ]
     recommendations_dfs += find_recommendation_files("data")
 
     # Create a partial function with the common parameters
     for recommender_algorithm, recommender_df_path in recommendations_dfs:
         recommendations_df = pd.read_csv(recommender_df_path) if recommender_df_path else None
 
-        process_func = partial(
-            process_user_questionnaire,
-            ratings_df=ratings_df,
-            recommendations_df=recommendations_df,
-            instructions=remove_breaks(instructions),
-            query=query
-        )
+        if recommender_algorithm == "random":
+            questionnaires_reconstructed_results = []
 
-        # Container for results
-        results = {}
+            results = {}
+            for uuid in tqdm(uuids, total=len(uuids), desc=f"Generating reconstructed questionnaires: {recommender_algorithm}"):
+                # Get all field names from the model
+                field_names = list(FoodAndActivityQuestionnaire.__annotations__.keys())
+                # Create a dictionary with random values 1-9 for each field
+                random_values = {field: random.randint(1, 11) for field in field_names}
+                # Instantiate the model with these random values
+                results[uuid] = FoodAndActivityQuestionnaire(**random_values)
+            questionnaires_reconstructed_results = [results[uuid] for uuid in uuids]
 
-        # Use ThreadPoolExecutor for parallel processing (5 workers)
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            # Submit all users as separate tasks
-            future_to_uuid = {
-                executor.submit(process_func, uuid): uuid
-                for uuid in uuids
-            }
+        else:
+            process_func = partial(
+                process_user_questionnaire,
+                ratings_df=ratings_df,
+                recommendations_df=recommendations_df,
+                instructions=remove_breaks(instructions),
+                query=query
+            )
 
-            # Process results as they complete
-            for future in tqdm(
-                    concurrent.futures.as_completed(future_to_uuid),
-                    total=len(uuids),
-                    desc=f"Generating reconstructed questionnaires: {recommender_algorithm}"
-            ):
-                try:
-                    # Get result from this task
-                    uuid, questionnaire = future.result()
-                    results[uuid] = questionnaire
-                except Exception as exc:
-                    uuid = future_to_uuid[future]
-                    print(f"UUID {uuid} generated an exception: {exc}")
+            # Container for results
+            results = {}
 
-        # Ensure same order as input UUIDs
-        questionnaires_reconstructed_results = [results[uuid] for uuid in uuids]
+            # Use ThreadPoolExecutor for parallel processing (5 workers)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                # Submit all users as separate tasks
+                future_to_uuid = {
+                    executor.submit(process_func, uuid): uuid
+                    for uuid in uuids
+                }
+
+                # Process results as they complete
+                for future in tqdm(
+                        concurrent.futures.as_completed(future_to_uuid),
+                        total=len(uuids),
+                        desc=f"Generating reconstructed questionnaires: {recommender_algorithm}"
+                ):
+                    try:
+                        # Get result from this task
+                        uuid, questionnaire = future.result()
+                        results[uuid] = questionnaire
+                    except Exception as exc:
+                        uuid = future_to_uuid[future]
+                        print(f"UUID {uuid} generated an exception: {exc}")
+
+            # Ensure same order as input UUIDs
+            questionnaires_reconstructed_results = [results[uuid] for uuid in uuids]
 
         # Create final dataframe and save results
         results_df = questionnaires_to_dataframe(uuids, questionnaires_reconstructed_results)
