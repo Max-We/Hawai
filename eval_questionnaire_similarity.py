@@ -40,15 +40,13 @@ def calculate_krippendorff_metrics(original_df, reconstructed_files):
         for i, row in original_df.iterrows():
             # Prepare vectors
             original = row.drop('uuid').values
-            original = np.where(original > 9, 5, original)  # Handle values > 9
-            reconstructed = recon_df.iloc[i].drop('uuid').values
+            original = np.where(original > 9, 5, original)  # Handle values > 9 as neutral
 
-            # Normalize vectors
-            original_norm = normalize(original)
-            reconstructed_norm = normalize(reconstructed)
+            reconstructed = recon_df.iloc[i].drop('uuid').values
+            reconstructed = np.where(reconstructed > 9, 5, reconstructed)  # Handle values > 9 as neutral
 
             # Calculate Krippendorff's alpha
-            reliability_data = np.array([original_norm, reconstructed_norm], dtype=float)
+            reliability_data = np.array([original, reconstructed], dtype=float)
             alpha = krippendorff.alpha(reliability_data, level_of_measurement='interval')
             kripp_values.append(alpha)
 

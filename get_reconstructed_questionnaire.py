@@ -36,7 +36,7 @@ def create_questionnaire_prompt(instructions: str, query: str, ratings_string: s
     prompt = f"""
     Instructions: {instructions}
 
-    Recipe ratings of this user: {ratings_string}
+    Recipe ratings of this user: {ratings_string if ratings_string else '[None]'}
     
     Recommended recipes for this user (he/she might like): {recommendations_string if recommendations_string else '[None]'}
 
@@ -178,21 +178,22 @@ def questionnaires_to_dataframe(uuids: list,
 
 def process_user_questionnaire(uuid, ratings_df, recommendations_df, instructions, query):
     """Process a single user's questionnaire and return the result"""
-    rated_item_titles = ratings_df[ratings_df['uuid'] == uuid]['item_title']
-    rated_item_ingredients = ratings_df[ratings_df['uuid'] == uuid]['item_ingredients']
-    ratings = ratings_df[ratings_df['uuid'] == uuid]['rating']
-
-    # Transform rating range from -2,2 to 1,9
-    ratings = (ratings * 2) + 5  # 5 is avg rating of 1-9
 
     # Resulting format: "{title: 'a', ingredients: 'b', rating: 'c'}, {title: 'd', ...}, ..."
     ratings_string = ""
-    for i in range(len(rated_item_titles)):
-        ratings_string += "{"
-        ratings_string += f"title: '{rated_item_titles.iloc[i]}', "
-        ratings_string += f"ingredients: '{rated_item_ingredients.iloc[i]}', "
-        ratings_string += f"rating: '{ratings.iloc[i]}'"
-        ratings_string += "}, "
+    if ratings_df is not None:
+        rated_item_titles = ratings_df[ratings_df['uuid'] == uuid]['item_title']
+        rated_item_ingredients = ratings_df[ratings_df['uuid'] == uuid]['item_ingredients']
+        ratings = ratings_df[ratings_df['uuid'] == uuid]['rating']
+        # Transform rating range from -2,2 to 1,9
+        ratings = (ratings * 2) + 5  # 5 is avg rating of 1-9
+
+        for i in range(len(rated_item_titles)):
+            ratings_string += "{"
+            ratings_string += f"title: '{rated_item_titles.iloc[i]}', "
+            ratings_string += f"ingredients: '{rated_item_ingredients.iloc[i]}', "
+            ratings_string += f"rating: '{ratings.iloc[i]}'"
+            ratings_string += "}, "
 
     recommendations_string = ""
     if recommendations_df is not None:
@@ -266,10 +267,11 @@ if __name__ == "__main__":
     uuids = ratings_df['uuid'].unique()
 
     recommendations_dfs = [
-        ("none", ""),   # ratings only, no recommender algorithm
-        ("random", "")  # fully random questionnaire (serves as baseline)
+        ("none", ""),       # no ratings or recommendations
+        ("ratings", ""),    # ratings only, no recommendations
+        ("random", "")      # fully random questionnaire (serves as baseline)
     ]
-    recommendations_dfs += find_recommendation_files("data")
+    recommendations_dfs += find_recommendation_files("data") # ratings + recommendations
 
     # Create a partial function with the common parameters
     for recommender_algorithm, recommender_df_path in recommendations_dfs:
@@ -287,11 +289,10 @@ if __name__ == "__main__":
                 # Instantiate the model with these random values
                 results[uuid] = FoodAndActivityQuestionnaire(**random_values)
             questionnaires_reconstructed_results = [results[uuid] for uuid in uuids]
-
         else:
             process_func = partial(
                 process_user_questionnaire,
-                ratings_df=ratings_df,
+                ratings_df=None if recommender_algorithm == "none" else ratings_df,
                 recommendations_df=recommendations_df,
                 instructions=remove_breaks(instructions),
                 query=query
