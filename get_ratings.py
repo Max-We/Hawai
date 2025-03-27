@@ -189,29 +189,21 @@ def active_learning_loop(user_item_matrix, items_information, idx_lookup_dict, q
     return summary
 
 
-def create_ratings_prompt(instructions: str, food_questionnaire: FoodAndActivityQuestionnaire, recipe_title: str, recipe_ingredients, query: str) -> str:
-    """
-    Create a prompt template for food and activity questionnaires.
-
-    Args:
-        instructions (str): Specific instructions for the model
-        persona (str): Description of the persona to adopt
-
-    Returns:
-        ChatPromptTemplate: Formatted prompt template
-    """
+def create_ratings_prompt(instructions: str, food_questionnaire: FoodAndActivityQuestionnaire, recipe_title: str,
+                          recipe_ingredients, query: str) -> str:
     prompt = f"""
     Person food preferences: <{food_questionnaire}>
-    
+
     Instructions: {instructions}
-    
+
     Recipe title: <{recipe_title}>
-    
+
     Recipe ingredients: {recipe_ingredients}
+
+    Important: When rating, consider using the full range from 1-9. Ratings of 1-2 should be used for recipes that would be strongly disliked, and not just for recipes that might be somewhat unpreferred.
 
     Query: {query}
     """
-
     return prompt
 
 def get_llm_recipe_rating(
@@ -287,7 +279,7 @@ def process_questionnaire(questionnaire_row, user_item_matrix, items_information
         items_information=items_information,
         idx_lookup_dict=idx_lookup_dict,
         questionnaire=questionnaire,
-        n_iterations=15,
+        n_iterations=20,
         n_factors=20,
         k_neighbors=50,
         latent_neighbor=False

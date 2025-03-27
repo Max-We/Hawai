@@ -38,7 +38,7 @@ def create_questionnaire_prompt(instructions: str, query: str, ratings_string: s
 
     Recipe ratings of this user: {ratings_string}
     
-    Recommendations for this user: {recommendations_string if recommendations_string else '[None]'}
+    Recommended recipes for this user (he/she might like): {recommendations_string if recommendations_string else '[None]'}
 
     You are completing PART {part_num} of 4 for this questionnaire. Each part contains a different set of items.
 
