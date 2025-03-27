@@ -1,7 +1,9 @@
+import concurrent
 import math
 import os
 import random
 import warnings
+from functools import partial
 
 import kagglehub
 import numpy as np
@@ -244,7 +246,37 @@ def df_row_to_questionnaire(df_row: pd.Series) -> FoodAndActivityQuestionnaire:
     # Create and return the FoodAndActivityPreferences object
     return FoodAndActivityQuestionnaire(**questionnaires_dict)
 
-# Example usage
+def process_questionnaire(questionnaire_row, user_item_matrix, items_information, idx_lookup_dict):
+    """Process a single questionnaire row and return the resulting ratings"""
+    # convert to questionnaire object
+    questionnaire = df_row_to_questionnaire(questionnaire_row)
+
+    # pick an item to rate
+    item_ratings = active_learning_loop(
+        user_item_matrix=user_item_matrix,
+        items_information=items_information,
+        idx_lookup_dict=idx_lookup_dict,
+        questionnaire=questionnaire,
+        n_iterations=15,
+        n_factors=20,
+        k_neighbors=50,
+        latent_neighbor=False
+    )
+
+    # Create rows for this questionnaire
+    questionnaire_rows = []
+    for item_id, rating, title, ingredients in item_ratings:
+        questionnaire_rows.append({
+            "uuid": questionnaire_row["uuid"],
+            "item_id": item_id,
+            "rating": rating,
+            "item_title": title,
+            "item_ingredients": ingredients
+        })
+
+    return questionnaire_rows
+
+
 if __name__ == "__main__":
     print("Loading questionnaires")
     questionnaires_df = pd.read_csv(QUESTIONNAIRES_FILE)
@@ -253,31 +285,39 @@ if __name__ == "__main__":
     print("Loading item information")
     items_information = load_items_information()
 
-    rows = []
-    for _, questionnaire_row in tqdm(questionnaires_df.iterrows(), total=len(questionnaires_df), desc="Rating items for each user"):
-        # convert to questionnaire object
-        questionnaire = df_row_to_questionnaire(questionnaire_row)
+    # Create a partial function with the common parameters
+    process_func = partial(
+        process_questionnaire,
+        user_item_matrix=user_item_matrix,
+        items_information=items_information,
+        idx_lookup_dict=idx_lookup_dict
+    )
 
-        # pick an item to rate
-        item_ratings = active_learning_loop(
-            user_item_matrix=user_item_matrix,
-            items_information=items_information,
-            idx_lookup_dict=idx_lookup_dict,
-            questionnaire=questionnaire,
-            n_iterations=15,
-            n_factors=20,
-            k_neighbors=50,
-            latent_neighbor=False
-        )
-        for item_id, rating, title, ingredients in item_ratings:
-            rows.append({
-                "uuid": questionnaire_row["uuid"],
-                "item_id": item_id,
-                "rating": rating,
-                "item_title": title,
-                "item_ingredients": ingredients
-            })
+    # Container for all result rows
+    all_rows = []
 
-    # create df with user id, item id, rating
-    ratings_df = pd.DataFrame(rows)
+    # Use ThreadPoolExecutor for parallel processing (5 workers)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        # Submit all questionnaires as separate tasks
+        future_to_questionnaire = {
+            executor.submit(process_func, row): i
+            for i, row in questionnaires_df.iterrows()
+        }
+
+        # Process results as they complete
+        for future in tqdm(
+                concurrent.futures.as_completed(future_to_questionnaire),
+                total=len(questionnaires_df),
+                desc="Rating items for each user"
+        ):
+            try:
+                # Get results from this task
+                questionnaire_rows = future.result()
+                all_rows.extend(questionnaire_rows)
+            except Exception as exc:
+                idx = future_to_questionnaire[future]
+                print(f"Questionnaire at index {idx} generated an exception: {exc}")
+
+    # Create df with user id, item id, rating
+    ratings_df = pd.DataFrame(all_rows)
     ratings_df.to_csv(RATINGS_FILE, index=False)

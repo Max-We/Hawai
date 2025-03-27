@@ -1,4 +1,8 @@
+import concurrent.futures
+import os
+import re
 import warnings
+from functools import partial
 from typing import List
 
 import pandas as pd
@@ -15,14 +19,14 @@ from structs.questionnaire import FoodAndActivityQuestionnaire, FoodAndActivityQ
 load_dotenv()
 
 
-def create_questionnaire_prompt(instructions: str, query: str, data_string: str, part_num: int) -> str:
+def create_questionnaire_prompt(instructions: str, query: str, ratings_string: str, recommendations_string: str, part_num: int) -> str:
     """
     Create a prompt template for a specific part of the food and activity questionnaire.
 
     Args:
         instructions (str): Specific instructions for the model
         query (str): The specific query or context
-        data_string (str): Recipe ratings and ingredient data
+        ratings_string (str): Recipe ratings and ingredient data
         part_num (int): The part number (1, 2, 3, or 4)
 
     Returns:
@@ -31,7 +35,9 @@ def create_questionnaire_prompt(instructions: str, query: str, data_string: str,
     prompt = f"""
     Instructions: {instructions}
 
-    Recipe ratings: {data_string}
+    Recipe ratings of this user: {ratings_string}
+    
+    Recommendations for this user: {recommendations_string if recommendations_string else '[None]'}
 
     You are completing PART {part_num} of 4 for this questionnaire. Each part contains a different set of items.
 
@@ -44,7 +50,8 @@ def create_questionnaire_prompt(instructions: str, query: str, data_string: str,
 def get_structured_questionnaire_part(
         instructions: str,
         query: str,
-        data_string: str,
+        ratings_string: str,
+        recommendations_string: str,
         part_num: int
 ):
     """
@@ -53,7 +60,8 @@ def get_structured_questionnaire_part(
     Args:
         instructions (str): Specific instructions for the model
         query (str): The specific query or context
-        data_string (str): Recipe ratings and ingredient data
+        ratings_string (str): Recipe ratings and ingredient data
+        recommendations_string (str): Recommendations for the user
         part_num (int): The part number (1, 2, 3, or 4)
 
     Returns:
@@ -77,7 +85,7 @@ def get_structured_questionnaire_part(
 
         structured_llm = model.with_structured_output(questionnaire_class)
 
-        prompt = create_questionnaire_prompt(instructions, query, data_string, part_num)
+        prompt = create_questionnaire_prompt(instructions, query, ratings_string, recommendations_string, part_num)
 
         n_trials = 3
         for i in range(n_trials):
@@ -119,7 +127,8 @@ def merge_questionnaire_parts(part1, part2, part3, part4) -> FoodAndActivityQues
 def get_complete_questionnaire(
         instructions: str,
         query: str,
-        data_string: str
+        ratings_string: str,
+        recommendations_string: str
 ) -> FoodAndActivityQuestionnaire:
     """
     Get a complete food and activity questionnaire by generating and merging all four parts.
@@ -127,16 +136,17 @@ def get_complete_questionnaire(
     Args:
         instructions (str): Specific instructions for the model
         query (str): The specific query or context
-        data_string (str): Recipe ratings and ingredient data
+        ratings_string (str): Recipe ratings and ingredient data
+        recommendations_string (str): Recommendations for the user
 
     Returns:
         FoodAndActivityQuestionnaire: Complete structured questionnaire
     """
     # Generate each part of the questionnaire
-    part1 = get_structured_questionnaire_part(instructions, query, data_string, 1)
-    part2 = get_structured_questionnaire_part(instructions, query, data_string, 2)
-    part3 = get_structured_questionnaire_part(instructions, query, data_string, 3)
-    part4 = get_structured_questionnaire_part(instructions, query, data_string, 4)
+    part1 = get_structured_questionnaire_part(instructions, query, ratings_string, recommendations_string, 1)
+    part2 = get_structured_questionnaire_part(instructions, query, ratings_string, recommendations_string, 2)
+    part3 = get_structured_questionnaire_part(instructions, query, ratings_string, recommendations_string, 3)
+    part4 = get_structured_questionnaire_part(instructions, query, ratings_string, recommendations_string, 4)
 
     # Merge all parts into a complete questionnaire
     return merge_questionnaire_parts(part1, part2, part3, part4)
@@ -165,6 +175,72 @@ def questionnaires_to_dataframe(uuids: list,
     return questionnaires_df
 
 
+def process_user_questionnaire(uuid, ratings_df, recommendations_df, instructions, query):
+    """Process a single user's questionnaire and return the result"""
+    rated_item_titles = ratings_df[ratings_df['uuid'] == uuid]['item_title']
+    rated_item_ingredients = ratings_df[ratings_df['uuid'] == uuid]['item_ingredients']
+    ratings = ratings_df[ratings_df['uuid'] == uuid]['rating']
+
+    # Transform rating range from -2,2 to 1,9
+    ratings = (ratings * 2) + 5  # 5 is avg rating of 1-9
+
+    # Resulting format: "{title: 'a', ingredients: 'b', rating: 'c'}, {title: 'd', ...}, ..."
+    ratings_string = ""
+    for i in range(len(rated_item_titles)):
+        ratings_string += "{"
+        ratings_string += f"title: '{rated_item_titles.iloc[i]}', "
+        ratings_string += f"ingredients: '{rated_item_ingredients.iloc[i]}', "
+        ratings_string += f"rating: '{ratings.iloc[i]}'"
+        ratings_string += "}, "
+
+    recommendations_string = ""
+    if recommendations_df is not None:
+        recommended_item_titles = recommendations_df[recommendations_df['uuid'] == uuid]['item_title']
+        recommended_item_ingredients = recommendations_df[recommendations_df['uuid'] == uuid]['item_ingredients']
+
+        for i in range(len(recommended_item_titles)):
+            recommendations_string += "{"
+            recommendations_string += f"title: '{recommended_item_titles.iloc[i]}', "
+            recommendations_string += f"ingredients: '{recommended_item_ingredients.iloc[i]}'"
+            recommendations_string += "}, "
+
+    # Generate complete questionnaire by combining all four parts
+    questionnaire = get_complete_questionnaire(
+        instructions=remove_breaks(instructions),
+        query=query,
+        ratings_string=ratings_string,
+        recommendations_string=recommendations_string
+    )
+
+    return uuid, questionnaire
+
+
+def find_recommendation_files(directory='data'):
+    """
+    Find all CSV files in the specified directory that match the pattern 'recommendations_*.csv'
+
+    Args:
+        directory (str): Directory to search in, defaults to current directory
+
+    Returns:
+        list: List of matching filenames with algorithm names and their full paths
+    """
+    # List all files in the directory
+    all_files = os.listdir(directory)
+
+    # Filter for CSV files that start with 'recommendations_'
+    recommendation_files = []
+    pattern = re.compile(r'recommendations_([^.]+)\.csv')
+
+    for filename in all_files:
+        match = pattern.match(filename)
+        if match:
+            algorithm_name = match.group(1)
+            file_path = os.path.join(directory, filename)
+            recommendation_files.append((algorithm_name, file_path))
+
+    return recommendation_files
+
 # Example usage
 if __name__ == "__main__":
     # Example instructions and persona
@@ -186,32 +262,52 @@ if __name__ == "__main__":
     query = "Based on the recipe ratings and ingredients data provided, please complete the following food and activity preference questionnaire as if you were this user. Rate how much you like each item, not how frequently you consume or do it."
 
     ratings_df = pd.read_csv(RATINGS_FILE)
-
     uuids = ratings_df['uuid'].unique()
-    questionnaires_reconstructed_results = []
-    for uuid in tqdm(uuids, total=len(uuids), desc="Generating reconstructed questionnaires"):
-        item_titles = ratings_df[ratings_df['uuid'] == uuid]['item_title']
-        item_ingredients = ratings_df[ratings_df['uuid'] == uuid]['item_ingredients']
-        ratings = ratings_df[ratings_df['uuid'] == uuid]['rating']
-        # Transform rating range from -2,2 to 1,9
-        ratings = (ratings*2) + 5 # 5 is avg rating of 1-9
 
-        # Resulting format: "{title: 'a', ingredients: 'b', rating: 'c'}, {title: 'd', ...}, ..."
-        data_string = ""
-        for i in range(len(item_titles)):
-            data_string += "{"
-            data_string += f"title: '{item_titles.iloc[i]}', "
-            data_string += f"ingredients: '{item_ingredients.iloc[i]}', "
-            data_string += f"rating: '{ratings.iloc[i]}'"
-            data_string += "}, "
+    recommendations_dfs = [("none", "")] # ratings only, no recommender algorithm
+    # recommendations_dfs = []
+    recommendations_dfs += find_recommendation_files("data")
 
-        # Generate complete questionnaire by combining all four parts
-        questionnaire = get_complete_questionnaire(
+    # Create a partial function with the common parameters
+    for recommender_algorithm, recommender_df_path in recommendations_dfs:
+        recommendations_df = pd.read_csv(recommender_df_path) if recommender_df_path else None
+
+        process_func = partial(
+            process_user_questionnaire,
+            ratings_df=ratings_df,
+            recommendations_df=recommendations_df,
             instructions=remove_breaks(instructions),
-            query=query,
-            data_string=data_string
+            query=query
         )
-        questionnaires_reconstructed_results.append(questionnaire)
 
-    results_df = questionnaires_to_dataframe(uuids, questionnaires_reconstructed_results)
-    results_df.to_csv(QUESTIONNAIRES_RECONSTRUCTED_FILE, index=False)
+        # Container for results
+        results = {}
+
+        # Use ThreadPoolExecutor for parallel processing (5 workers)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            # Submit all users as separate tasks
+            future_to_uuid = {
+                executor.submit(process_func, uuid): uuid
+                for uuid in uuids
+            }
+
+            # Process results as they complete
+            for future in tqdm(
+                    concurrent.futures.as_completed(future_to_uuid),
+                    total=len(uuids),
+                    desc=f"Generating reconstructed questionnaires: {recommender_algorithm}"
+            ):
+                try:
+                    # Get result from this task
+                    uuid, questionnaire = future.result()
+                    results[uuid] = questionnaire
+                except Exception as exc:
+                    uuid = future_to_uuid[future]
+                    print(f"UUID {uuid} generated an exception: {exc}")
+
+        # Ensure same order as input UUIDs
+        questionnaires_reconstructed_results = [results[uuid] for uuid in uuids]
+
+        # Create final dataframe and save results
+        results_df = questionnaires_to_dataframe(uuids, questionnaires_reconstructed_results)
+        results_df.to_csv(QUESTIONNAIRES_RECONSTRUCTED_FILE+recommender_algorithm+".csv", index=False)
