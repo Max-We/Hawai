@@ -7,8 +7,10 @@ from langchain_openai import ChatOpenAI
 from randomuser import RandomUser
 from tabulate import tabulate
 from tqdm import tqdm
+import concurrent.futures
 
-from config import PERSONAS_FILE, NUM_PERSONAS, TEMPERATURE_PERSONAS, TOKENS_PERSONAS, MODEL_PERSONAS
+from config import PERSONAS_FILE, NUM_PERSONAS, TEMPERATURE_PERSONAS, TOKENS_PERSONAS, MODEL_PERSONAS, \
+    CONCURRENT_WORKERS
 
 # Load OPENAI_API_KEY from .env file
 load_dotenv()
@@ -123,26 +125,76 @@ def generate_person_description(keywords_dict):
     return result.content.strip()
 
 
-def generate_personas(num_personas, output_file):
+def process_single_persona(persona):
     """
-    Generate random personas, their descriptions, and export to CSV
+    Process a single persona by generating its description.
+    This function is designed to be used with concurrent processing.
+
+    Args:
+        persona (dict): Dictionary containing person attributes
+
+    Returns:
+        dict: Updated persona dictionary with description
+    """
+    try:
+        description = generate_person_description(persona)
+        persona['description'] = description
+        return persona
+    except Exception as e:
+        print(f"Error generating description for {persona['name']}: {str(e)}")
+        persona['description'] = f"Error generating description: {str(e)}"
+        return persona
+
+
+def generate_personas_concurrent(num_personas, output_file):
+    """
+    Generate random personas with concurrent processing, their descriptions, and export to CSV
 
     Args:
         num_personas (int): Number of personas to generate
         output_file (str): Path to the output CSV file
+        max_workers (int, optional): Maximum number of workers for concurrent processing.
+                                    If None, it will use the default value based on system.
+
+    Returns:
+        list: List of generated personas
     """
     # 1. Generate random person keywords
     print("Generating random persona keywords")
     personas = generate_random_personas(num_personas)
 
-    # 2. Generate descriptions for each person based on these keywords
-    for person in tqdm(personas, total=len(personas), desc="Generating persona descriptions"):
-        try:
-            description = generate_person_description(person)
-            person['description'] = description
-        except Exception as e:
-            print(f"Error generating description for {person['name']}: {str(e)}")
-            person['description'] = "Error generating description"
+    # 2. Generate descriptions concurrently
+    print(f"Generating {num_personas} persona descriptions using concurrent processing")
+
+    # Create a progress bar that will be updated by the main thread
+    progress_bar = tqdm(total=num_personas, desc="Processing personas")
+    processed_count = 0
+
+    # Process personas concurrently using ThreadPoolExecutor
+    # (ThreadPoolExecutor is better for I/O-bound tasks like API calls)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=CONCURRENT_WORKERS) as executor:
+        # Submit all persona generation tasks
+        future_to_persona = {executor.submit(process_single_persona, persona): i
+                             for i, persona in enumerate(personas)}
+
+        # Process results as they complete
+        for future in concurrent.futures.as_completed(future_to_persona):
+            idx = future_to_persona[future]
+            try:
+                # Get the result and update the personas list
+                result = future.result()
+                personas[idx] = result
+
+                # Update progress
+                processed_count += 1
+                progress_bar.update(1)
+
+            except Exception as exc:
+                print(f"Persona {idx} generated an exception: {exc}")
+                personas[idx]['description'] = f"Error: {str(exc)}"
+                progress_bar.update(1)
+
+    progress_bar.close()
 
     # Convert to DataFrame and export to CSV
     df = pd.DataFrame(personas)
@@ -172,15 +224,7 @@ if __name__ == "__main__":
         output_file = PERSONAS_FILE
 
         print(f"Generating {NUM_PERSONAS} random personas")
-        personas = generate_personas(NUM_PERSONAS, output_file)
-
-        # Example result
-        print_persona_keywords(personas[0])
-        print("-" * 25)
-        print("Generated Story")
-        print("-" * 25)
-        print(personas[0]['description'])
-        print("-" * 25)
+        personas = generate_personas_concurrent(NUM_PERSONAS, output_file)
 
     except Exception as e:
         print(f"An error occurred: {str(e)}")

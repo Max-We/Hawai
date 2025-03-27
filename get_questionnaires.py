@@ -1,14 +1,14 @@
-import random
 import warnings
+from functools import partial
 from typing import List
 
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 import pandas as pd
 from dotenv import load_dotenv
 from tqdm import tqdm
+import concurrent.futures
 
-from config import QUESTIONNAIRES_FILE, TEMPERATURE_QUESTIONNAIRE, MODEL_QUESTIONNAIRES
+from config import QUESTIONNAIRES_FILE, TEMPERATURE_QUESTIONNAIRE, MODEL_QUESTIONNAIRES, CONCURRENT_WORKERS
 from get_personas import PERSONAS_FILE
 from structs.questionnaire import FoodAndActivityQuestionnaire, FoodAndActivityQuestionnairePart1, \
     FoodAndActivityQuestionnairePart2, FoodAndActivityQuestionnairePart3, FoodAndActivityQuestionnairePart4
@@ -167,6 +167,36 @@ def questionnaires_to_dataframe(personas_df: pd.DataFrame,
     return questionnaires_df
 
 
+def process_persona_to_questionnaire(persona_row, instructions, query):
+    """
+    Process a single persona to generate a complete questionnaire.
+    This function is designed to be used with concurrent.futures.
+
+    Args:
+        persona_row: A row from the personas DataFrame
+        instructions: Instructions for the questionnaire
+        query: Query for the questionnaire
+
+    Returns:
+        tuple: (persona_index, questionnaire)
+    """
+    idx = persona_row[0]
+    person = persona_row[1]
+    description = person['description']
+
+    try:
+        # Generate complete questionnaire by combining all four parts
+        questionnaire = get_complete_questionnaire(
+            instructions=remove_breaks(instructions),
+            persona=remove_breaks(description),
+            query=query
+        )
+        return idx, questionnaire
+    except Exception as e:
+        print(f"Error processing persona {idx}: {e}")
+        return idx, None
+
+
 # Example usage
 if __name__ == "__main__":
     # Example instructions and persona
@@ -186,18 +216,38 @@ if __name__ == "__main__":
 
     personas_df = pd.read_csv(PERSONAS_FILE)
 
-    questionnaires_results = []
-    for _, person in tqdm(personas_df.iterrows(), total=len(personas_df), desc="Generating questionnaires"):
-        description = person['description']
+    # Create a list to store results
+    questionnaires_results = [None] * len(personas_df)
 
-        # Generate complete questionnaire by combining all four parts
-        questionnaire = get_complete_questionnaire(
-            instructions=remove_breaks(instructions),
-            persona=remove_breaks(description),
-            query=query
-        )
+    # Process personas concurrently
+    print(f"Starting concurrent processing with {CONCURRENT_WORKERS} workers...")
 
-        questionnaires_results.append(questionnaire)
+    # Create a partial function with fixed arguments
+    process_func = partial(process_persona_to_questionnaire, instructions=remove_breaks(instructions), query=query)
 
-    results_df = questionnaires_to_dataframe(personas_df, questionnaires_results)
+    # Use ThreadPoolExecutor for concurrent API calls
+    with concurrent.futures.ThreadPoolExecutor(max_workers=CONCURRENT_WORKERS) as executor:
+        # Submit all tasks and create a map of futures
+        future_to_idx = {
+            executor.submit(process_func, (idx, person)): idx
+            for idx, person in personas_df.iterrows()
+        }
+
+        # Use tqdm to show progress
+        for future in tqdm(concurrent.futures.as_completed(future_to_idx),
+                           total=len(personas_df),
+                           desc="Generating questionnaires"):
+            idx, questionnaire = future.result()
+            if questionnaire:
+                questionnaires_results[idx] = questionnaire
+
+    # Filter out any None values (failed processing)
+    questionnaires_results = [q for q in questionnaires_results if q is not None]
+
+    # Create DataFrame from results and save to CSV
+    results_df = questionnaires_to_dataframe(
+        personas_df,
+        questionnaires_results)
     results_df.to_csv(QUESTIONNAIRES_FILE, index=False)
+
+    print(f"Completed processing {len(questionnaires_results)} personas out of {len(personas_df)}.")

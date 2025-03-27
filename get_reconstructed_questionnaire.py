@@ -12,7 +12,7 @@ from langchain_openai import ChatOpenAI
 from tqdm import tqdm
 
 from config import TEMPERATURE_QUESTIONNAIRE, MODEL_QUESTIONNAIRES, RATINGS_FILE, \
-    QUESTIONNAIRES_RECONSTRUCTED_FILE
+    QUESTIONNAIRES_RECONSTRUCTED_FILE, CONCURRENT_WORKERS
 from structs.questionnaire import FoodAndActivityQuestionnaire, FoodAndActivityQuestionnairePart1, \
     FoodAndActivityQuestionnairePart2, FoodAndActivityQuestionnairePart3, FoodAndActivityQuestionnairePart4
 
@@ -301,7 +301,7 @@ if __name__ == "__main__":
             results = {}
 
             # Use ThreadPoolExecutor for parallel processing (5 workers)
-            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=CONCURRENT_WORKERS//3) as executor:
                 # Submit all users as separate tasks
                 future_to_uuid = {
                     executor.submit(process_func, uuid): uuid

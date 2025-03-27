@@ -326,8 +326,7 @@ if __name__ == "__main__":
     # Container for all result rows
     all_rows = []
 
-    # Use ThreadPoolExecutor for parallel processing (5 workers)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=config.CONCURRENT_WORKERS) as executor:
         # Submit all questionnaires as separate tasks
         future_to_questionnaire = {
             executor.submit(process_func, row): i

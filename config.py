@@ -1,7 +1,9 @@
+CONCURRENT_WORKERS = 15
+
 # Step 1: Personas
 MODEL_PERSONAS = "gpt-4o-mini"
 TEMPERATURE_PERSONAS = 0.7
-TOKENS_PERSONAS=500
+TOKENS_PERSONAS=777
 NUM_PERSONAS = 10
 
 # Step 2: Questionnaires (used in questionnaire generation AND reconstruction)
