@@ -273,6 +273,8 @@ if __name__ == "__main__":
     ]
     recommendations_dfs += find_recommendation_files("data") # ratings + recommendations
 
+    print(f"Processing {len(recommendations_dfs)} types of reconstructed questionnaires...")
+
     # Create a partial function with the common parameters
     for recommender_algorithm, recommender_df_path in recommendations_dfs:
         recommendations_df = pd.read_csv(recommender_df_path) if recommender_df_path else None
@@ -301,7 +303,7 @@ if __name__ == "__main__":
             # Container for results
             results = {}
 
-            # Use ThreadPoolExecutor for parallel processing (5 workers)
+            # Info: Use max of 5 workers to avoid OpenAI API rate limits (tokens/min)
             with concurrent.futures.ThreadPoolExecutor(max_workers=CONCURRENT_WORKERS//3) as executor:
                 # Submit all users as separate tasks
                 future_to_uuid = {
