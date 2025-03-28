@@ -1,3 +1,4 @@
+import time
 import warnings
 from functools import partial
 from typing import List
@@ -88,6 +89,7 @@ def get_structured_questionnaire_part(
             except Exception as e:
                 print(
                     f"Error generating questionnaire part {part_num} for persona, retrying {i}/{n_trials}...")
+                time.sleep(REQUEST_TIMEOUT)
                 if i == n_trials - 1:
                     raise e
 
@@ -194,6 +196,7 @@ def process_persona_to_questionnaire(persona_row, instructions, query):
         return idx, questionnaire
     except Exception as e:
         print(f"Error processing persona {idx}: {e}")
+        time.sleep(3)
         return idx, None
 
 
@@ -220,7 +223,7 @@ if __name__ == "__main__":
     questionnaires_results = [None] * len(personas_df)
 
     # Process personas concurrently
-    print(f"Starting concurrent processing with {CONCURRENT_WORKERS} workers...")
+    print(f"Generating questionnaires...")
 
     # Create a partial function with fixed arguments
     process_func = partial(process_persona_to_questionnaire, instructions=remove_breaks(instructions), query=query)

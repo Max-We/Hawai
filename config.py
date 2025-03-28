@@ -1,10 +1,11 @@
 CONCURRENT_WORKERS = 15
+REQUEST_TIMEOUT = 3
 
 # Step 1: Personas
-MODEL_PERSONAS = "gpt-4o-mini"
+MODEL_PERSONAS = "gpt-4o"
 TEMPERATURE_PERSONAS = 0.7
 TOKENS_PERSONAS=777
-NUM_PERSONAS = 10
+NUM_PERSONAS = 25
 
 # Step 2: Questionnaires (used in questionnaire generation AND reconstruction)
 MODEL_QUESTIONNAIRES = "gpt-4o-mini"

@@ -164,7 +164,7 @@ def generate_personas_concurrent(num_personas, output_file):
     personas = generate_random_personas(num_personas)
 
     # 2. Generate descriptions concurrently
-    print(f"Generating {num_personas} persona descriptions using concurrent processing")
+    print(f"Generating {num_personas} persona descriptions...")
 
     # Create a progress bar that will be updated by the main thread
     progress_bar = tqdm(total=num_personas, desc="Processing personas")
