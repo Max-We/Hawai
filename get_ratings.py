@@ -2,6 +2,7 @@ import concurrent
 import math
 import os
 import random
+import time
 import warnings
 from functools import partial
 
@@ -237,7 +238,12 @@ def get_llm_recipe_rating(
 
         prompt = create_ratings_prompt(instructions, user_questionnaire, recipe_title, recipe_ingredients, query)
 
-        return structured_llm.invoke(prompt)
+        for i in range(3):
+            try:
+                return structured_llm.invoke(prompt)
+            except:
+                print(f"Retrying {i}/3...")
+                time.sleep(config.REQUEST_TIMEOUT)
 
 def df_row_to_questionnaire(df_row: pd.Series) -> FoodAndActivityQuestionnaire:
     """

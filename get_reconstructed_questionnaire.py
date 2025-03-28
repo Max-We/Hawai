@@ -2,6 +2,7 @@ import concurrent.futures
 import os
 import random
 import re
+import time
 import warnings
 from functools import partial
 from typing import List
@@ -12,7 +13,7 @@ from langchain_openai import ChatOpenAI
 from tqdm import tqdm
 
 from config import TEMPERATURE_QUESTIONNAIRE, MODEL_QUESTIONNAIRES, RATINGS_FILE, \
-    QUESTIONNAIRES_RECONSTRUCTED_FILE, CONCURRENT_WORKERS
+    QUESTIONNAIRES_RECONSTRUCTED_FILE, CONCURRENT_WORKERS, REQUEST_TIMEOUT
 from structs.questionnaire import FoodAndActivityQuestionnaire, FoodAndActivityQuestionnairePart1, \
     FoodAndActivityQuestionnairePart2, FoodAndActivityQuestionnairePart3, FoodAndActivityQuestionnairePart4
 
@@ -93,10 +94,8 @@ def get_structured_questionnaire_part(
             try:
                 return structured_llm.invoke(prompt)
             except Exception as e:
-                print(
-                    f"Error generating questionnaire part {part_num}, retrying {i}/{n_trials}...")
-                if i == n_trials - 1:
-                    raise e
+                print(f"Retrying {i}/3...")
+                time.sleep(REQUEST_TIMEOUT)
 
 
 def merge_questionnaire_parts(part1, part2, part3, part4) -> FoodAndActivityQuestionnaire:
@@ -272,6 +271,7 @@ if __name__ == "__main__":
         ("random", "")      # fully random questionnaire (serves as baseline)
     ]
     recommendations_dfs += find_recommendation_files("data") # ratings + recommendations
+    # recommendations_dfs = recommendations_dfs[3:] # continue  from a specific recommender on
 
     print(f"Processing {len(recommendations_dfs)} types of reconstructed questionnaires...")
 
@@ -303,8 +303,9 @@ if __name__ == "__main__":
             # Container for results
             results = {}
 
-            # Info: Use max of 5 workers to avoid OpenAI API rate limits (tokens/min)
-            with concurrent.futures.ThreadPoolExecutor(max_workers=CONCURRENT_WORKERS//3) as executor:
+            # Info: Use max of 5 workers to avoid OpenAI API rate limits (o4-mini)
+            # Info: for o4 (non-mini) use only 1 worker (has strict rate limits)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, CONCURRENT_WORKERS//3)) as executor:
                 # Submit all users as separate tasks
                 future_to_uuid = {
                     executor.submit(process_func, uuid): uuid

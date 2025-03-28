@@ -9,7 +9,8 @@ from dotenv import load_dotenv
 from tqdm import tqdm
 import concurrent.futures
 
-from config import QUESTIONNAIRES_FILE, TEMPERATURE_QUESTIONNAIRE, MODEL_QUESTIONNAIRES, CONCURRENT_WORKERS
+from config import QUESTIONNAIRES_FILE, TEMPERATURE_QUESTIONNAIRE, MODEL_QUESTIONNAIRES, CONCURRENT_WORKERS, \
+    REQUEST_TIMEOUT
 from get_personas import PERSONAS_FILE
 from structs.questionnaire import FoodAndActivityQuestionnaire, FoodAndActivityQuestionnairePart1, \
     FoodAndActivityQuestionnairePart2, FoodAndActivityQuestionnairePart3, FoodAndActivityQuestionnairePart4
@@ -86,12 +87,9 @@ def get_structured_questionnaire_part(
         for i in range(n_trials):
             try:
                 return structured_llm.invoke(prompt)
-            except Exception as e:
-                print(
-                    f"Error generating questionnaire part {part_num} for persona, retrying {i}/{n_trials}...")
+            except:
+                print(f"Retrying {i}/3")
                 time.sleep(REQUEST_TIMEOUT)
-                if i == n_trials - 1:
-                    raise e
 
 
 def merge_questionnaire_parts(part1, part2, part3, part4) -> FoodAndActivityQuestionnaire:
