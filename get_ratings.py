@@ -297,7 +297,7 @@ def process_questionnaire(questionnaire_row, user_item_matrix, items_information
     #     items_information=items_information,
     #     idx_lookup_dict=idx_lookup_dict,
     #     questionnaire=questionnaire,
-    #     n_iterations=15
+    #     n_iterations=20
     # )
 
     # Create rows for this questionnaire
