@@ -37,7 +37,7 @@ def create_questionnaire_prompt(instructions: str, query: str, ratings_string: s
     prompt = f"""
     Instructions: {instructions}
 
-    Recipe ratings of this user: {ratings_string if ratings_string else '[None]'}
+    Recipe ratings of this user: {ratings_string if (ratings_string and (not recommendations_string)) else '[None]'}
     
     Recommended recipes for this user (he/she might like): {recommendations_string if recommendations_string else '[None]'}
 
