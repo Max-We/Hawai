@@ -130,6 +130,7 @@ def random_learning_loop(user_item_matrix, items_information, idx_lookup_dict, q
             item_idx = idx_lookup_dict[selected_item_id]
 
         # Ask oracle to rate the new item
+        time.sleep(2)
         rating, title, ingredients = get_rating(item_idx, items_information, questionnaire)
 
         # Update user vector and mask
