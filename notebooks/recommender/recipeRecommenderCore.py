@@ -1,13 +1,10 @@
-import json
+import tensorflow as tf
+tf.compat.v1.disable_eager_execution()
 import os
 import pandas as pd
 from libreco.data import random_split, DatasetPure
 from libreco.algorithms import BPR, UserCF, ItemCF, SVD, SVDpp, ALS
-from libreco.evaluation import evaluate
 import kagglehub
-import tensorflow as tf
-import random
-import numpy as np
 
 
 class RecipeRecommenderCore:
@@ -16,10 +13,10 @@ class RecipeRecommenderCore:
         self.embed_size = 64     # Für Embedding-basierte Modelle
         self.n_epochs = 8         # Für trainierbare Modelle
         self.lr = 5e-5            # Lernrate
-        self.reg = 5e-6           # Regularisierung
+        self.reg = 1e-5           # Regularisierung
         self.batch_size = 1024    # Batch-Größe
-        self.num_neg = 10          # Negative Samples
-        self.sampler = "random"   # Sampling-Methode
+        self.num_neg = 20          # Negative Samples
+        self.sampler = "unconsumed"   # Sampling-Methode
         self.k_sim = 50           # Für CF-Modelle
         self.sim_type = "cosine"  # Ähnlichkeitsmaß
 
@@ -35,7 +32,6 @@ class RecipeRecommenderCore:
         self.item_popularity = None
 
         self.data_path = data_path
-        self._load_recipe_names()
 
 
     def set_model(self, model_type):
@@ -146,12 +142,6 @@ class RecipeRecommenderCore:
       )
       self.item_popularity = self.data_filtered["item"].value_counts().to_dict()
 
-    def get_model(self):
-      return self.model
-
-    def get_data(self):
-      return self.data_filtered
-
     def load_and_preprocess(self, min_interactions):
         """Load and preprocess interaction data"""
         # Download and load dataset
@@ -196,237 +186,6 @@ class RecipeRecommenderCore:
         self.test_data = DatasetPure.build_testset(self.test_data)
 
 
-    def save_recommendations_as_csv(self,items_information,amount_of_recs, path):
-      df = self.get_recommendations(items_information,amount_of_recs)
-      df.to_csv(path, index=False)
-      return df
-
-    def get_recommendations(self, items_information, n_rec):
-        """
-        Holt Empfehlungen für alle User in user_id_map und speichert die Ergebnisse in einem DataFrame.
-        """
-        dfs = []
-        for user_identifier in self.user_id_map:
-            df = self.get_recommendation(user_identifier, n_rec, items_information)
-            dfs.append(df)
-        # Alle einzelnen DataFrames zusammenfügen
-        final_df = pd.concat(dfs, ignore_index=True)
-        return final_df
-
-    def get_recommendation(self, user_identifier, n_rec, items_information):
-        """Get personalized recommendations with popularity balancing"""
-        try:
-            # Modell-Check
-            if not self.model:
-                raise ValueError("Model not trained. Call train() first.")
-
-            # User-ID Mapping
-            user_id = user_identifier
-            if isinstance(user_identifier, str):
-                if user_identifier not in self.user_id_map:
-                    raise ValueError(f"User UUID '{user_identifier}' not found")
-                user_id = self.user_id_map[user_identifier]
-
-            # Initiale Kandidaten mit 5x Überabtastung
-            recommendations = self.model.recommend_user(
-                user=user_id, n_rec=n_rec * 5, filter_consumed=True
-            )
-            # Convert each item to a Python integer to avoid numpy types
-            candidate_items = [int(item) for item in recommendations.get(user_id, [])]
-
-            # Check if candidate_items is empty (explicit length check)
-            if len(candidate_items) == 0:
-                print(f"No candidates for user {user_id}")
-                return pd.DataFrame()
-
-            # Berechnung der Long-Tail-Präferenz
-            user_interactions = self.data_filtered[self.data_filtered['user'] == user_id]['item']
-            user_popularity = [self.item_popularity.get(item, 0) for item in user_interactions]
-
-            if user_popularity:
-                median_pop = np.median(user_popularity)
-                long_tail_ratio = sum(pop < median_pop for pop in user_popularity) / len(user_popularity)
-                max_popularity = max(self.item_popularity.values())
-            else:
-                # Fallback für neue Nutzer
-                long_tail_ratio = 0.5
-                max_popularity = max(self.item_popularity.values()) if self.item_popularity else 1
-
-            # Klassifizierung in Short-Head und Long-Tail
-            sorted_popularity = sorted(self.item_popularity.values(), reverse=True)
-            threshold_idx = int(0.2 * len(sorted_popularity))
-            short_head_threshold = sorted_popularity[threshold_idx] if sorted_popularity else 0
-
-            short_head = {item for item in candidate_items
-                        if self.item_popularity.get(item, 0) >= short_head_threshold}
-            long_tail = set(candidate_items) - short_head
-
-            # Iteratives xQuAD-basiertes Re-Ranking
-            lambda_param = 0.6  # Trade-off-Parameter
-            selected = []
-            remaining = candidate_items.copy()
-
-            while len(selected) < n_rec and remaining:
-                best_score = -1
-                best_item = None
-
-                for idx, item in enumerate(remaining):
-                    # Relevanz basierend auf ursprünglichem Ranking
-                    relevance = 1 - (idx / len(remaining))
-
-                    # Diversitätsbonus für Long-Tail-Items
-                    diversity_bonus = 1.0
-                    if item in long_tail:
-                        diversity_bonus += lambda_param * long_tail_ratio
-
-                    # Popularitätsadjustierung
-                    popularity = self.item_popularity.get(item, 0)
-                    popularity_score = (1 - popularity / max_popularity)
-
-                    total_score = (0.7 * relevance) + (0.3 * diversity_bonus * popularity_score)
-
-                    if total_score > best_score:
-                        best_score = total_score
-                        best_item = item
-
-                if best_item:
-                    selected.append(best_item)
-                    remaining.remove(best_item)
-
-            # Metadaten-Anreicherung mit verbesserter Fehlerbehandlung
-            records = []
-            for item_id in selected[:n_rec]:
-                try:
-                    title, ingredients = self.__find_item_by_id(item_id, items_information)
-                    records.append({
-                        "uuid": user_identifier,
-                        "item_id": item_id,
-                        "item_title": title or "Unknown",
-                        "item_ingredients": ingredients or []
-                    })
-                except (KeyError, IndexError) as e:
-                    print(f"Metadata error for item {item_id}: {str(e)}")
-                    continue
-
-            # Berechnung der Evaluierungsmetriken
-            if records:
-                arp = sum(item['popularity'] for item in records) / len(records)
-                aplt = sum(1 for item in records if item['popularity'] < short_head_threshold) / len(records)
-                print(f"Recommender stats - ARP: {arp:.2f}, APLT: {aplt:.2f}")
-
-            return pd.DataFrame(records).drop_duplicates().head(n_rec)
-
-        except Exception as e:
-            print(f"Recommendation error for user {user_id}: {str(e)}")
-            return pd.DataFrame()
-
-    def evaluate(self):
-        """Evaluate model performance"""
-        return evaluate(
-            model=self.model,
-            data=self.test_data,
-            neg_sampling=True,
-            metrics=["loss", "roc_auc", "precision", "recall", "ndcg"]
-        )
-
-    def info(self, UUID):
-      """Gibt einen DataFrame mit allen Interaktionen des angegebenen Benutzers (UUID) zurück."""
-      # Überprüfen, ob Daten geladen wurden
-      if self.data_filtered is None or not isinstance(self.data_filtered, pd.DataFrame):
-          return pd.DataFrame(columns=["user", "item", "label", "name"])
-
-      # Prüfen, ob die UUID vorhanden ist
-      if UUID not in self.user_id_map:
-          return pd.DataFrame(columns=["user", "item", "label", "name"])
-
-      # Numerische Benutzer-ID abrufen
-      user_id = self.user_id_map[UUID]
-
-      # Interaktionen filtern
-      user_interactions = self.data_filtered[self.data_filtered['user'] == user_id].copy()
-
-      if user_interactions.empty:
-          return pd.DataFrame(columns=["user", "item", "label", "name"])
-
-      # UUID statt numerischer ID setzen
-      user_interactions['user'] = UUID
-
-      # Rezeptnamen hinzufügen
-      merged = user_interactions.merge(self.name_df, left_on='item', right_on='id', how='left')
-      merged['name'] = merged['name'].fillna('Unknown Recipe')
-
-      # Ergebnis formatieren
-      result = merged[['user', 'item', 'label', 'name']]
-
-      return result
-
-    def save(self, storagepath):
-      """Speichert Modell und Zustand"""
-      if not self.model:
-          raise ValueError("Modell nicht trainiert")
-
-      os.makedirs(storagepath, exist_ok=True)
-
-      # 1. Modell mit LibreCos eigener Methode speichern
-      self.model.save(storagepath, model_name="BPR_model")
-
-      # 2. User-Mapping als JSON
-      with open(os.path.join(storagepath, "user_mapping.json"), "w") as f:
-          json.dump(self.user_id_map, f)
-
-      # 3. Rezeptnamen-Daten
-      self.name_df.to_json(
-          os.path.join(storagepath, "recipe_names.json"),
-          orient="records"
-      )
-
-      # 4. Gefilterte Daten
-      if self.data_filtered is not None:
-          self.data_filtered.to_parquet(
-             os.path.join(storagepath, "filtered_data.parquet")
-          )
-
-    @classmethod
-    def get(cls, storagepath):
-        """Lädt gespeicherte Instanz"""
-        instance = cls.__new__(cls)
-        instance.data_path = None  # Nicht mehr relevant
-
-        # 1. Modell laden
-        instance.model = BPR.load(
-            path=storagepath,
-            model_name="BPR_model",
-            data_info=None  # Wird automatisch geladen
-        )
-
-        # 2. DataInfo aus dem Modell holen
-        instance.data_info = instance.model.data_info
-
-        # 3. User-Mapping laden
-        with open(os.path.join(storagepath, "user_mapping.json"), "r") as f:
-            instance.user_id_map = json.load(f)
-
-        # 4. Rezeptnamen
-        instance.name_df = pd.read_json(
-            os.path.join(storagepath, "recipe_names.json"),
-            orient="records"
-        )
-
-        # 5. Gefilterte Daten
-        instance.data_filtered = pd.read_parquet(
-            os.path.join(storagepath, "filtered_data.parquet")
-        )
-
-        return instance
-
-#----------------------------------------------------------------------------
-
-
-    def _load_recipe_names(self):
-        """Load recipe ID to name mapping"""
-        path = kagglehub.dataset_download(self.data_path)
-        raw_recipes_path = os.path.join(path, "RAW_recipes.csv")
-        self.name_df = pd.read_csv(raw_recipes_path)[["name", "id"]]
 
     def _rename_and_filter_data(self, interactions_data):
       # Erzeuge explizite Kopie des DataFrames
@@ -447,19 +206,7 @@ class RecipeRecommenderCore:
       df.loc[:, "label"] = df["label"].astype(int)
       return df
 
-    def _get_user_interactions(self, user_id):
-      """Get recipes rated by a user"""
-      df = self.data_filtered[self.data_filtered['user'] == user_id]
-      for _, row in df.iterrows():
-         recipe = self._get_recipe_name(row['item'])
-         rating = row['label']
-         print(f"Recipe: {recipe}, Rating: {rating}")
 
-
-    def _get_recipe_name(self, recipe_id):
-        """Helper to get recipe name from ID"""
-        name = self.name_df.loc[self.name_df['id'] == recipe_id, 'name']
-        return name.values[0] if not name.empty else "Unknown Recipe"
 
     def import_ratings_csv(self, file_path):
       """Import ratings from CSV and map UUIDs to numeric IDs"""
@@ -520,10 +267,8 @@ class RecipeRecommenderCore:
 
       return df
 
+    def get_model(self):
+      return self.model
 
-    def __get_score(self,userid,itemid):
-        return self.model.predict(userid,itemid)
-
-    def __find_item_by_id(self,recipe_id, items_information):
-        df = items_information.loc[items_information["id"] == recipe_id]
-        return df['name'].values[0], df['ingredients'].values[0]
+    def get_data(self):
+      return self.data_filtered
