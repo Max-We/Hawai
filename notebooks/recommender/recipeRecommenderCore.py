@@ -9,14 +9,13 @@ import kagglehub
 
 class RecipeRecommenderCore:
     def __init__(self, data_path="shuyangli94/food-com-recipes-and-user-interactions"):
-        # Hyperparameter mit BPR als Referenz
         self.embed_size = 64     # Für Embedding-basierte Modelle
-        self.n_epochs = 8         # Für trainierbare Modelle
-        self.lr = 5e-5            # Lernrate
-        self.reg = 1e-5           # Regularisierung
-        self.batch_size = 1024    # Batch-Größe
-        self.num_neg = 20          # Negative Samples
-        self.sampler = "unconsumed"   # Sampling-Methode
+        self.n_epochs = 10        # Für trainierbare Modelle
+        self.lr = 1e-4            # Lernrate
+        self.batch_size = 256    # Batch-Größe
+        self.num_neg = 10 # Negative Samples
+        self.reg=1e-5
+        self.num_threads=4
         self.k_sim = 50           # Für CF-Modelle
         self.sim_type = "cosine"  # Ähnlichkeitsmaß
 
@@ -34,113 +33,103 @@ class RecipeRecommenderCore:
         self.data_path = data_path
 
 
-    def set_model(self, model_type):
+    def set_model(self,model_name):
         """Zentrale Methode zur Modellauswahl mit einheitlichen Parametern"""
         tf.compat.v1.reset_default_graph()
-        self.__prepare_data(model_type)  # Daten für alle Modelle vorbereiten
-
-        common_params = {
-            "task": "ranking",
-            "data_info": self.data_info
-        }
-
-        model_config = {
-           "BPR": {
-            "class": BPR,
-            "params": {
-                "loss_type": "bpr",
-                "embed_size": self.embed_size,
-                "n_epochs": self.n_epochs,
-                "lr": self.lr,
-                "batch_size": self.batch_size,
-                "num_neg": self.num_neg,
-                "reg": self.reg,
-                "sampler": self.sampler
-            }
-        },
-        "UserCF": {
-            "class": UserCF,
-            "params": {
-                "k_sim": self.k_sim,
-                "sim_type": self.sim_type
-            }
-        },
-        "ItemCF": {
-            "class": ItemCF,
-            "params": {
-                "k_sim": self.k_sim,
-                "sim_type": self.sim_type
-            }
-        },
-        "SVD": {
-            "class": SVD,
-            "params": {
-                "embed_size": self.embed_size,
-                "n_epochs": self.n_epochs,
-                "lr": self.lr,
-                "reg": self.reg
-            }
-        },
-        "SVDpp": {
-            "class": SVDpp,
-            "params": {
-                "embed_size": self.embed_size,
-                "n_epochs": self.n_epochs,
-                "lr": self.lr,
-                "reg": self.reg,
-            }
-        },
-        "ALS": {
-            "class": ALS,
-            "params": {
-                "embed_size": self.embed_size,
-                "n_epochs": self.n_epochs,
-                "reg": self.reg,
-                "alpha": 10,
-                "use_cg": True,
-                "n_threads": 1
-            }
-        }
+        self.__prepare_data()  
+        
+        model_dict = {
+        "SVD": self.set_model_SVD,
+        "SVDpp": self.set_model_SVDpp,
+        "BPR": self.set_model_BPR,
+        "ALS": self.set_model_ALS,
+        "UserCF": self.set_model_UserCF,
+        "ItemCF": self.set_model_ItemCF
     }
-        config = model_config.get(model_type)
-        if not config:
-            raise ValueError(f"Unbekanntes Modell: {model_type}")
 
-        self.model = config["class"](**common_params, **config["params"])
-
+        if model_name in model_dict:
+            self.model = model_dict[model_name]()  
+        else:
+            raise ValueError(f"Unbekanntes Modell: {model_name}")
+        
+    
+    def set_model_SVD(self):
+        return SVD(
+                    "ranking",
+                    data_info=self.data_info,
+                    loss_type="cross_entropy",
+                    embed_size=64,
+                    n_epochs=10,
+                    lr=3e-4,
+                    reg=1e-5,
+                    batch_size=256,
+                    num_neg=10,
+                    )
+        
+    def set_model_SVDpp(self):
+        return SVDpp(
+                    "ranking",
+                    data_info=self.data_info,
+                    loss_type="cross_entropy",
+                    embed_size=64,
+                    n_epochs=10,
+                    lr=3e-4,
+                    reg=1e-5,
+                    batch_size=256,
+                    num_neg=10,
+                    )
+    def set_model_BPR(self):
+        return BPR(
+                    "ranking",
+                    data_info=self.data_info,
+                    loss_type="bpr",
+                    embed_size=64,
+                    n_epochs=10,
+                    lr=3e-4,
+                    reg=1e-5,
+                    batch_size=256,
+                    num_neg=10,
+                    )
+    def set_model_ALS(self):
+        return ALS(
+                    "ranking",
+                    data_info=self.data_info,
+                    embed_size=64,
+                    n_epochs=10,
+                    reg=1e-5,
+                    )
+    def set_model_UserCF(self):
+        return UserCF(
+                        "ranking",
+                        data_info=self.data_info,
+                    )
+    def set_model_ItemCF(self):
+        return ItemCF(
+                        "ranking",
+                        data_info=self.data_info,
+                    )
 
     def train(self):
-      if not self.model:
-          raise ValueError("Model not trained. Call set_model() first.")
-
-     # Gemeinsame Parameter
-      common_params = {
-          "verbose": 2,
-          "eval_data": self.eval_data,
-          "metrics": ["loss", "roc_auc", "precision", "recall", "ndcg"]
-     }
-
-      # Modellspezifische Parameter
-      if isinstance(self.model, (UserCF, ItemCF)):
-          # Für Collaborative Filtering
-          fit_params = {
-              "neg_sampling": True,
-              "verbose": 1
-         }
-      else:
-          # Für Embedding-basierte Modelle: batch_size entfernen
-          fit_params = {
-              "neg_sampling": True,
-              "shuffle": True,
-             **common_params
-         }
-
-     # Training durchführen
-      self.model.fit(
-          self.train_data,
-          **fit_params
-      )
-      self.item_popularity = self.data_filtered["item"].value_counts().to_dict()
+        if not self.model:
+            raise ValueError("Model not trained. Call set_model() first.")
+        
+        if isinstance(self.model, (UserCF, ItemCF)):  # Tuple für kürzere Syntax
+            self.model.fit(
+                train_data=self.train_data,
+                neg_sampling=True,
+                verbose=2,
+                eval_data=self.eval_data,
+                metrics=["loss", "roc_auc", "precision", "recall", "ndcg"],
+            )
+        else:
+            self.model.fit(
+                train_data=self.train_data,
+                neg_sampling=True,
+                shuffle=True,
+                verbose=2,
+                eval_data=self.eval_data,
+                metrics=["loss", "roc_auc", "precision", "recall", "ndcg"],
+            )
 
     def load_and_preprocess(self, min_interactions):
         """Load and preprocess interaction data"""
@@ -154,7 +143,8 @@ class RecipeRecommenderCore:
 
         combined = pd.concat([train, eval, test], ignore_index=True)
         combined = self._rename_and_filter_data(combined)
-
+        
+        combined = combined[["user", "item", "label"]]
         # Filter items
         item_counts = combined["item"].value_counts()
         items_to_keep = item_counts[item_counts >= min_interactions].index
@@ -164,17 +154,16 @@ class RecipeRecommenderCore:
         user_counts = filtered["user"].value_counts()
         users_to_keep = user_counts[user_counts >= min_interactions].index
         self.data_filtered = filtered[filtered["user"].isin(users_to_keep)]
+        
 
-        print("Wie viele interactions gibt es?" + str(len(self.data_filtered)))
+        print(f"Finale Daten: {len(self.data_filtered)} Interaktionen ")
 
-    def __prepare_data(self,model_type):
-      # Convert ratings to 0/1 for UserCF and ItemCF
-        if model_type in ["UserCF", "ItemCF"]:
+    def __prepare_data(self):
         # Binarize ratings: 0-2 → 0, 3-5 → 1
-          self.data_filtered['label'] = self.data_filtered['label'].apply(
-              lambda x: 0 if x <= 2 else 1
-          )
-      # Split data
+        self.data_filtered['label'] = self.data_filtered['label'].apply(
+            lambda x: 0 if x <= 2 else 1
+        )
+        # Split data
         self.train_data, self.eval_data, self.test_data = random_split(
             self.data_filtered,
             multi_ratios=[0.8, 0.1, 0.1]
@@ -198,10 +187,6 @@ class RecipeRecommenderCore:
           "rating": "label"
       })
 
-      # Spalten filtern
-      keep_cols = ["user", "item", "label"]
-      df = df[keep_cols]
-
       # Typkonvertierung mit .loc
       df.loc[:, "label"] = df["label"].astype(int)
       return df
@@ -222,7 +207,7 @@ class RecipeRecommenderCore:
               raise ValueError(f"Fehlende Spalten: {missing}")
 
           # Process and map UUIDs
-          processed_df = self.__process_ratings(df)
+          processed_df = self.__process_csv(df)
 
           # Add to data
           self.data_filtered = pd.concat(
@@ -236,7 +221,7 @@ class RecipeRecommenderCore:
       except Exception as e:
           print(f"Fehler: {str(e)}")
 
-    def __process_ratings(self, df):
+    def __process_csv(self, df):
       """Map UUIDs to numeric IDs"""
       # Rename columns
       df = df.rename(columns={
@@ -244,9 +229,11 @@ class RecipeRecommenderCore:
           "item_id": "item",
           "rating": "label"
       })
+      
 
-      # Convert from range [-2,2] to [1,5]
-      df["label"] = df["label"] + 3
+      df.loc[df["label"] < 0, "label"] = 0
+      df.loc[df["label"] > 0, "label"] = 1
+
 
       # Determine current max ID from user_id_map
       current_max = max(self.user_id_map.values()) if self.user_id_map else 0
@@ -272,3 +259,6 @@ class RecipeRecommenderCore:
 
     def get_data(self):
       return self.data_filtered
+  
+    def get_userid_map(self):
+        return self.user_id_map
