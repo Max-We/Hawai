@@ -102,11 +102,15 @@ class RecipeRecommenderCore:
         return UserCF(
                         "ranking",
                         data_info=self.data_info,
+                        sim_type="cosine",  
+                        k=50,
                     )
     def set_model_ItemCF(self):
         return ItemCF(
                         "ranking",
                         data_info=self.data_info,
+                        sim_type="cosine",  
+                        k=50,
                     )
 
     def train(self):
