@@ -9,9 +9,7 @@ from dotenv import load_dotenv
 from tqdm import tqdm
 import concurrent.futures
 
-from config import QUESTIONNAIRES_FILE, TEMPERATURE_QUESTIONNAIRE, MODEL_QUESTIONNAIRES, CONCURRENT_WORKERS, \
-    REQUEST_TIMEOUT
-from get_personas import PERSONAS_FILE
+from config import QUESTIONNAIRES_FILE, TEMPERATURE_QUESTIONNAIRE, MODEL_QUESTIONNAIRES, CONCURRENT_WORKERS, REQUEST_TIMEOUT
 from structs.questionnaire import FoodAndActivityQuestionnaire, FoodAndActivityQuestionnairePart1, \
     FoodAndActivityQuestionnairePart2, FoodAndActivityQuestionnairePart3, FoodAndActivityQuestionnairePart4
 
@@ -215,7 +213,7 @@ if __name__ == "__main__":
 
     query = "What would be this person's likely food and activity preferences? Use the description and use the full scale (1-9)."
 
-    personas_df = pd.read_csv(PERSONAS_FILE)
+    personas_df = pd.read_csv("/Users/felixipfling/Documents/GitHub/Hawai/personas_Simp_uuid.csv")
 
     # Create a list to store results
     questionnaires_results = [None] * len(personas_df)

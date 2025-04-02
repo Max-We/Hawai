@@ -218,7 +218,7 @@ def create_full_user_heatmap(results, algorithms, output_dir):
 if __name__ == "__main__":
     # Load original data
     print("Loading original questionnaires (ground truth)")
-    questionnaires_df = pd.read_csv(QUESTIONNAIRES_FILE)
+    questionnaires_df = pd.read_csv("/Users/felixipfling/Documents/GitHub/Hawai/questionairsMOD.csv")
 
     # Find reconstructed files
     reconstructed_files = find_questionnaire_files()

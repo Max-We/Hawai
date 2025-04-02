@@ -101,7 +101,7 @@ def generate_person_description(keywords_dict):
     - Foods they strongly dislike or avoid
     - Special preparation methods they prefer (e.g., spice level, cooking styles)
 
-    The goal is to create a unique food profile that captures their individual tastes and relationship with food beyond general categories like 'vegan' or 'keto':
+    The goal is to create a unique food profile that captures their individual tastes and relationship with food it has to contain and be consistent with the Diet in Dietary Preference, while going beyond general categories like 'vegan' or 'keto':
     
     Name: {name}
     Age: {age}

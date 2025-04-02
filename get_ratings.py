@@ -94,16 +94,24 @@ def load_user_item_matrix():
 def project(data):
     # project from 1,9 to -2,2
     # [1,2]: -2, [3,4]: -1, [5]: 0, [6,7]: 1, [8,9]: 2
-    return math.ceil(abs((data-5)/2)) * (-1 if data < 5 else 1)
+    #return math.ceil(abs((data-5)/2)) * (-1 if data < 5 else 1)
+    valid_values=[2,1,-1,-2]
+    return np.where(np.isin(data, list(valid_values)), data, 0)
 
+    
 def get_rating(item_idx, items_information, questionnaire):
-    instructions = """Given a person with the previous food and activity preferences, on a scale from 1 to 9, rate how he / she would rate the following recipe."""
-    query = "How would this person rate this recipe, on a scale from 1 to 9?"
+    instructions = """the input is a questionair of a persons food and activity preferences on a scale from 1 to 9, 1 means a person would never eat it and strongly disklikes it, 9 means the persons loves 10 means the person has never tryed it and 11 means the person prefers not to awnser. you should act like the person would act and rate the following recipe based on the input."""
+    query = "How would this person rate this recipe, on a scale from -2(strongly dislikes),-1(not enjoying),1(enjoying)2(strongly likes)?"
 
     item_name = items_information.loc[item_idx]["name"]
     item_ingredients = items_information.loc[item_idx]["ingredients"]
 
     rating_response = get_llm_recipe_rating(instructions, questionnaire, item_name, item_ingredients, query)
+    print(rating_response)
+    if rating_response is None or rating_response.rating is None:
+        print(f"Fehler: Kein gültiges Rating für {item_name} erhalten!")
+        return None, item_name, item_ingredients  # Oder ein Default-Wert
+
     rating = project(rating_response.rating)
 
     # print(f"Item: {item_name}, Rating (1-9) {rating_response.rating}, Projected: {rating}")
@@ -112,6 +120,7 @@ def get_rating(item_idx, items_information, questionnaire):
 
 
 def random_learning_loop(user_item_matrix, items_information, idx_lookup_dict, questionnaire, n_iterations):
+   
     n_items = user_item_matrix.shape[1]
 
     # Iterative random selection process
@@ -160,8 +169,17 @@ def active_learning_loop(user_item_matrix, items_information, idx_lookup_dict, q
     summary = []
     user_vector, user_latent = np.zeros(n_items), np.mean(U, axis=0)
     not_rated_mask = np.ones(n_items)
+    
     for _ in range(n_iterations):
         # Find similar users in original vector space
+        print(user_latent,user_vector,user_item_matrix)
+        print("Anzahl NaNs in user_latent:", np.sum(np.isnan(user_latent)))
+        print("Anzahl NaNs in user_vector:", np.sum(np.isnan(user_vector)))
+        print("Anzahl NaNs in user_item_matrix:", np.sum(np.isnan(user_item_matrix)))   
+
+        user_latent = np.nan_to_num(user_latent, nan=0.0)
+        user_vector = np.nan_to_num(user_vector, nan=0.0)
+        user_item_matrix = np.nan_to_num(user_item_matrix, nan=0.0)
         if not latent_neighbor:
             _, similar_users_indices = knn_model.kneighbors([user_vector], n_neighbors=min(k_neighbors, len(user_item_matrix)))
         else:
@@ -202,7 +220,8 @@ def create_ratings_prompt(instructions: str, food_questionnaire: FoodAndActivity
 
     Recipe ingredients: {recipe_ingredients}
 
-    Important: When rating, consider using the full range from 1-9. Ratings of 1-2 should be used for recipes that would be strongly disliked, and not just for recipes that might be somewhat unpreferred.
+    Important:  -2 for vervy diskliked food the person does not eat,  -1 for food the person does not like to eat but is abel to, use 1 for food the person enjoys eating and 2 for food the preson really likes a lot.
+                
 
     Query: {query}
     """
@@ -316,7 +335,7 @@ def process_questionnaire(questionnaire_row, user_item_matrix, items_information
 
 if __name__ == "__main__":
     print("Loading questionnaires")
-    questionnaires_df = pd.read_csv(QUESTIONNAIRES_FILE)
+    questionnaires_df = pd.read_csv("/Users/felixipfling/Documents/GitHub/Hawai/questionairsMOD.csv")
     print("Loading user-item matrix")
     user_item_matrix, idx_lookup_dict = load_user_item_matrix()
     print("Loading item information")
