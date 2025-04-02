@@ -177,7 +177,7 @@ class RecipeRecommenderCore:
         self.train_data, self.data_info = DatasetPure.build_trainset(self.train_data)
         self.eval_data = DatasetPure.build_evalset(self.eval_data)
         self.test_data = DatasetPure.build_testset(self.test_data)
-
+        print(self.data_info)
 
 
     def _rename_and_filter_data(self, interactions_data):
@@ -265,4 +265,4 @@ class RecipeRecommenderCore:
       return self.data_filtered
   
     def get_userid_map(self):
-        return self.user_id_map
+  
