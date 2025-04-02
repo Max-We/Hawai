@@ -55,17 +55,20 @@ class RecipeRecommenderCore:
     
     def set_model_SVD(self):
         return SVD(
-                    "ranking",
-                    data_info=self.data_info,
-                    loss_type="cross_entropy",
-                    embed_size=64,
-                    n_epochs=10,
-                    lr=3e-4,
-                    reg=1e-5,
-                    batch_size=256,
-                    num_neg=10,
-                    )
-        
+            "ranking",
+            data_info=self.data_info,
+            loss_type="cross_entropy",
+            embed_size=128,
+            norm_embed=True,
+            n_epochs=10,
+            lr=1e-3,
+            lr_decay=True,
+            reg=1e-5,
+            batch_size=256,
+            sampler="random",
+            num_neg=5
+        )
+            
     def set_model_SVDpp(self):
         return SVDpp(
                     "ranking",
@@ -84,9 +87,10 @@ class RecipeRecommenderCore:
                     data_info=self.data_info,
                     loss_type="bpr",
                     embed_size=64,
-                    n_epochs=10,
+                    n_epochs=15,
                     lr=3e-4,
                     reg=1e-5,
+                    lr_decay=True,
                     batch_size=256,
                     num_neg=10,
                     )
@@ -94,23 +98,26 @@ class RecipeRecommenderCore:
         return ALS(
                     "ranking",
                     data_info=self.data_info,
-                    embed_size=64,
-                    n_epochs=10,
-                    reg=1e-5,
+                    embed_size=32,
+                    n_epochs=15,
+                    reg=5e-6,
+                    alpha=15,         # Higher confidence for implicit feedback
+                    n_threads=3,
+                    
                     )
     def set_model_UserCF(self):
         return UserCF(
                         "ranking",
                         data_info=self.data_info,
                         sim_type="cosine",  
-                        k=50,
+                        k_sim=50,
                     )
     def set_model_ItemCF(self):
         return ItemCF(
                         "ranking",
                         data_info=self.data_info,
                         sim_type="cosine",  
-                        k=50,
+                        k_sim=50,
                     )
 
     def train(self):
@@ -265,4 +272,4 @@ class RecipeRecommenderCore:
       return self.data_filtered
   
     def get_userid_map(self):
-  
+        return self.user_id_map
